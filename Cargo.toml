@@ -8,5 +8,6 @@ authors = ["Lloyd Bond"]
 
 [dependencies]
 iced = {version = "0.13.1", features = ["debug", "tokio", "highlighter"]}
+makefile-lossless = "0.1.5"
 rfd = "0.15.0"
 tokio = {version = "1", features = ["fs"]}
