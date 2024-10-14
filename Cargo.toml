@@ -1,6 +1,12 @@
 [package]
 name = "cracker"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
+license = "GPL-3.0"
+description = "Cracker is a simple, fast, and plain task runner. Designed with the idea of supporting as many task tools as possible."
+authors = ["Lloyd Bond"]
 
 [dependencies]
+iced = {version = "0.13.1", features = ["debug", "tokio", "highlighter"]}
+rfd = "0.15.0"
+tokio = {version = "1", features = ["fs"]}

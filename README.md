@@ -1,2 +1,2 @@
 # cracker
-A rusty ui for explorer and starting tasks.
+A rusty ui for exploring ajanifestjanifestnd starting tasks.
