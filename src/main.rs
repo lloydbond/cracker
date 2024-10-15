@@ -63,12 +63,9 @@ impl Editor {
                 let result = Makefile::read_relaxed(f);
                 if result.is_ok() {
                     let makefile: makefile_lossless::Makefile = result.unwrap();
-                    println!("{}", makefile.rules().count());
 
                     self.targets.clear();
                     for rule in makefile.rules() {
-                        println!("{}", rule.targets().count());
-                        println!("{}", rule.to_string());
                         if rule.to_string().contains(" :") {
                             println!("multi target rules unsupported for now");
                             println!("{}", rule.to_string());
@@ -115,10 +112,13 @@ impl Editor {
 
         let mut targets = Vec::new();
         for target in self.targets.iter() {
-            targets.push(action(
-                start_icon(),
+            targets.push(target_card(
+                action(
+                    start_icon(),
+                    target,
+                    Some(Message::TaskMake(target.to_string())),
+                ),
                 target,
-                Some(Message::TaskMake(target.to_string())),
             ));
         }
 
@@ -141,6 +141,15 @@ impl Editor {
 pub enum Error {
     DialogClosed,
     IoError(io::ErrorKind),
+}
+
+fn target_card<'a, Message: Clone + 'a>(
+    action: Element<'a, Message>,
+    label: &'a str,
+) -> Element<'a, Message> {
+    container(row![action, label].spacing(10))
+        .padding(10)
+        .into()
 }
 
 fn action<'a, Message: Clone + 'a>(
