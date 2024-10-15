@@ -1,4 +1,3 @@
-use iced::highlighter;
 use iced::widget::{self, button, column, container, row, text, tooltip};
 use iced::widget::{horizontal_space, pick_list, Column};
 use iced::{Center, Element, Font, Task, Theme};
@@ -19,7 +18,7 @@ pub fn main() -> iced::Result {
 }
 
 struct Editor {
-    theme: highlighter::Theme,
+    theme: Theme,
     targets: Vec<String>,
 }
 
@@ -28,14 +27,14 @@ enum Message {
     LoadMakeTargets,
     Reload,
     TaskMake(String),
-    ThemeSelected(highlighter::Theme),
+    ThemeSelected(Theme),
 }
 
 impl Editor {
     fn new() -> (Self, Task<Message>) {
         (
             Self {
-                theme: highlighter::Theme::Base16Mocha,
+                theme: Theme::Dracula,
                 targets: Vec::new(),
             },
             Task::batch([Task::done(Message::LoadMakeTargets), widget::focus_next()]),
@@ -68,7 +67,7 @@ impl Editor {
                     for rule in makefile.rules() {
                         if rule.to_string().contains(" :") {
                             println!("multi target rules unsupported for now");
-                            println!("{}", rule.to_string());
+                            println!("{}", rule);
                             continue;
                         }
                         rule.targets()
@@ -97,13 +96,9 @@ impl Editor {
         let controls = row![
             action(reload_icon(), "reload", Some(Message::Reload)),
             horizontal_space(),
-            pick_list(
-                highlighter::Theme::ALL,
-                Some(self.theme),
-                Message::ThemeSelected
-            )
-            .text_size(14)
-            .padding([5, 10])
+            pick_list(Theme::ALL, Some(self.theme.clone()), Message::ThemeSelected)
+                .text_size(14)
+                .padding([5, 10])
         ]
         .spacing(10)
         .align_y(Center);
@@ -129,11 +124,13 @@ impl Editor {
     }
 
     fn theme(&self) -> Theme {
-        if self.theme.is_dark() {
-            Theme::Dark
-        } else {
-            Theme::Light
-        }
+        // Theme::Dracula
+        self.theme.clone()
+        // if self.theme.is_dark() {
+        //     Theme::Dark
+        // } else {
+        //     Theme::Light
+        // }
     }
 }
 
