@@ -1,6 +1,6 @@
 use iced::highlighter;
-use iced::widget::Column;
 use iced::widget::{self, button, column, container, row, text, tooltip};
+use iced::widget::{horizontal_space, pick_list, Column};
 use iced::{Center, Element, Font, Task, Theme};
 
 // use peg;
@@ -25,16 +25,17 @@ struct Editor {
 
 #[derive(Debug, Clone)]
 enum Message {
-    ThemeSelected(highlighter::Theme),
-    TaskMake(String),
     LoadMakeTargets,
+    Reload,
+    TaskMake(String),
+    ThemeSelected(highlighter::Theme),
 }
 
 impl Editor {
     fn new() -> (Self, Task<Message>) {
         (
             Self {
-                theme: highlighter::Theme::SolarizedDark,
+                theme: highlighter::Theme::Base16Mocha,
                 targets: Vec::new(),
             },
             Task::batch([Task::done(Message::LoadMakeTargets), widget::focus_next()]),
@@ -56,6 +57,7 @@ impl Editor {
 
                 Task::none()
             }
+            Message::Reload => Task::done(Message::LoadMakeTargets),
             Message::LoadMakeTargets => {
                 let f = fs::File::open("Makefile").unwrap();
                 let result = Makefile::read_relaxed(f);
@@ -65,9 +67,20 @@ impl Editor {
 
                     self.targets.clear();
                     for rule in makefile.rules() {
-                        for target in rule.targets() {
-                            self.targets.push(target.clone());
+                        println!("{}", rule.targets().count());
+                        println!("{}", rule.to_string());
+                        if rule.to_string().contains(" :") {
+                            println!("multi target rules unsupported for now");
+                            println!("{}", rule.to_string());
+                            continue;
                         }
+                        rule.targets()
+                            .filter(|target| !target.starts_with("_"))
+                            .for_each(|target| self.targets.push(target));
+                        // for target in rule.targets() {
+                        //     println!("{}", target);
+                        //     self.targets.push(target);
+                        // }
                     }
                 }
 
@@ -84,7 +97,19 @@ impl Editor {
     }
 
     fn view(&self) -> Element<Message> {
-        let controls = row![].spacing(10).align_y(Center);
+        let controls = row![
+            action(reload_icon(), "reload", Some(Message::Reload)),
+            horizontal_space(),
+            pick_list(
+                highlighter::Theme::ALL,
+                Some(self.theme),
+                Message::ThemeSelected
+            )
+            .text_size(14)
+            .padding([5, 10])
+        ]
+        .spacing(10)
+        .align_y(Center);
 
         let status = row![].spacing(10);
 
@@ -136,6 +161,10 @@ fn action<'a, Message: Clone + 'a>(
     } else {
         action.style(button::secondary).into()
     }
+}
+
+fn reload_icon<'a, Message>() -> Element<'a, Message> {
+    icon('\u{0e800}')
 }
 
 fn start_icon<'a, Message>() -> Element<'a, Message> {
