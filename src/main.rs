@@ -4,10 +4,11 @@ use iced::{Center, Element, Font, Task, Theme};
 
 // use peg;
 use makefile_lossless::Makefile;
+use std::any::Any;
 use std::fs;
 
-use std::io;
-use std::process::Command;
+use std::io::{self, Read, Write};
+use std::process::{Command, Stdio};
 
 pub fn main() -> iced::Result {
     iced::application("Editor - Iced", Editor::update, Editor::view)
@@ -20,6 +21,7 @@ pub fn main() -> iced::Result {
 struct Editor {
     theme: Theme,
     targets: Vec<String>,
+    process: Command,
     output: String,
 }
 
@@ -50,18 +52,36 @@ impl Editor {
 
                 Task::none()
             }
+            Message::TaskMakeCleanUp => {
+                self.output.clear();
+                self.process.stdin.unwrap().write_all(0x03);
+            }
             Message::TaskMake(target) => {
-                let output = Command::new("make")
-                    .arg(target)
-                    .output()
-                    .unwrap_or_else(|e| panic!("failed to execute process: {}", e));
-                if output.status.success() {
-                    // let s = String::from_utf8_lossy(&output.stdout).into_owned();
+                self.process = match Command::new("make")
+                    .arg(target.clone().as_str())
+                    .stdin(Stdio::piped())
+                    .stdout(Stdio::piped())
+                    .spawn()
+                {
+                    Err(why) => panic!("couldn't start {}: {}", target.clone(), why),
+                    Ok(process) => process,
+                };
 
-                    self.output = String::from_utf8_lossy(&output.stdout).into_owned();
-                } else {
-                    self.output = String::from_utf8_lossy(&output.stderr).into_owned();
+                match process.stdout.unwrap().read_to_string(&mut self.output) {
+                    Err(why) => panic!("couldn't read {}: {}", target.clone(), why),
+                    Ok(_) => println!("running command {}", target),
                 }
+                // let output = Command::new("make")
+                //     .arg(target)
+                //     .output()
+                //     .unwrap_or_else(|e| panic!("failed to execute process: {}", e));
+                // if output.status.success() {
+                //     // let s = String::from_utf8_lossy(&output.stdout).into_owned();
+
+                //     self.output = String::from_utf8_lossy(&output.stdout).into_owned();
+                // } else {
+                //     self.output = String::from_utf8_lossy(&output.stderr).into_owned();
+                // }
 
                 Task::none()
             }
