@@ -20,6 +20,7 @@ pub fn main() -> iced::Result {
 struct Editor {
     theme: Theme,
     targets: Vec<String>,
+    output: String,
 }
 
 #[derive(Debug, Clone)]
@@ -36,6 +37,7 @@ impl Editor {
             Self {
                 theme: Theme::Dracula,
                 targets: Vec::new(),
+                output: String::new(),
             },
             Task::batch([Task::done(Message::LoadMakeTargets), widget::focus_next()]),
         )
@@ -49,10 +51,17 @@ impl Editor {
                 Task::none()
             }
             Message::TaskMake(target) => {
-                Command::new("make")
+                let output = Command::new("make")
                     .arg(target)
-                    .spawn()
-                    .expect("echo failed");
+                    .output()
+                    .unwrap_or_else(|e| panic!("failed to execute process: {}", e));
+                if output.status.success() {
+                    // let s = String::from_utf8_lossy(&output.stdout).into_owned();
+
+                    self.output = String::from_utf8_lossy(&output.stdout).into_owned();
+                } else {
+                    self.output = String::from_utf8_lossy(&output.stderr).into_owned();
+                }
 
                 Task::none()
             }
@@ -116,8 +125,9 @@ impl Editor {
                 target,
             ));
         }
-
-        column![controls, Column::from_vec(targets), status,]
+        let s = self.output.as_str();
+        let text_box: Column<Message> = column![text!("{s}").size(40)];
+        column![controls, Column::from_vec(targets), text_box, status,]
             .spacing(10)
             .padding(10)
             .into()
@@ -145,6 +155,7 @@ fn target_card<'a, Message: Clone + 'a>(
     label: &'a str,
 ) -> Element<'a, Message> {
     container(row![action, label].spacing(10))
+        .style(container::bordered_box)
         .padding(10)
         .into()
 }
@@ -162,7 +173,7 @@ fn action<'a, Message: Clone + 'a>(
             label,
             tooltip::Position::FollowCursor,
         )
-        .style(container::rounded_box)
+        .style(container::transparent)
         .into()
     } else {
         action.style(button::secondary).into()
