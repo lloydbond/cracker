@@ -147,20 +147,26 @@ impl Editor {
         ]
         .spacing(10)
         .align_y(Center);
-
-        let status = row![].spacing(10);
-        let scroll_to_end_button = || {
-            button("Scroll to end")
-                .padding(10)
-                .on_press(Message::ScrollToEnd)
-        };
+        let scroll_to_end_button =
+            || action(down_icon(), "Scroll to end", Some(Message::ScrollToEnd));
 
         let scroll_to_beginning_button = || {
-            button("Scroll to beginning")
-                .padding(10)
-                .on_press(Message::ScrollToBeginning)
+            action(
+                up_icon(),
+                "Scroll to beginning",
+                Some(Message::ScrollToBeginning),
+            )
         };
 
+        let controls_output = row![
+            horizontal_space(),
+            scroll_to_end_button(),
+            scroll_to_beginning_button(),
+        ]
+        .spacing(10)
+        .padding(10);
+
+        let status = row![].spacing(10);
         let mut targets = Vec::new();
         for target in self.targets.iter() {
             targets.push(target_card(
@@ -172,23 +178,14 @@ impl Editor {
                 target,
             ));
         }
-        let s = self.output.as_str();
-        let text_box: Column<Message> = column![text!("{s}").font(Font::MONOSPACE)];
+        let text_box: Column<Message> =
+            column![text!("{}", self.output.as_str()).font(Font::MONOSPACE)];
         let scrollable_content: Element<Message> = Element::from(
             scrollable(
-                column![
-                    scroll_to_end_button(),
-                    text("Beginning!"),
-                    // vertical_space().height(1200),
-                    // text("Middle!"),
-                    text_box,
-                    // vertical_space().height(1200),
-                    text("End!"),
-                    scroll_to_beginning_button(),
-                ]
-                .align_x(Center)
-                .padding([40, 0])
-                .spacing(40),
+                column![text_box,]
+                    .align_x(Center)
+                    .padding([40, 0])
+                    .spacing(40),
             )
             .direction(scrollable::Direction::Vertical(
                 scrollable::Scrollbar::new()
@@ -206,6 +203,7 @@ impl Editor {
         column![
             controls,
             Column::from_vec(targets),
+            controls_output,
             scrollable_content,
             // text_box,
             status,
@@ -262,6 +260,14 @@ fn reload_icon<'a, Message>() -> Element<'a, Message> {
 
 fn start_icon<'a, Message>() -> Element<'a, Message> {
     icon('\u{0e802}')
+}
+
+fn up_icon<'a, Message>() -> Element<'a, Message> {
+    icon('\u{0e803}')
+}
+
+fn down_icon<'a, Message>() -> Element<'a, Message> {
+    icon('\u{0e801}')
 }
 
 fn icon<'a, Message>(codepoint: char) -> Element<'a, Message> {
