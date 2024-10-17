@@ -7,7 +7,8 @@ description = "Cracker is a simple, fast, and plain task runner. Designed with t
 authors = ["Lloyd Bond"]
 
 [dependencies]
-iced = {version = "0.13.1", features = ["debug", "tokio", "highlighter"]}
+iced = {version = "0.13.1", features = ["debug", "tokio", "highlighter", "lazy"]}
 makefile-lossless = "0.1.5"
+once_cell = "1.20.2"
 rfd = "0.15.0"
 tokio = {version = "1", features = ["fs"]}

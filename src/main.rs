@@ -1,6 +1,8 @@
-use iced::widget::{self, button, column, container, row, text, tooltip};
+use iced::widget::{self, button, column, container, row, scrollable, text, tooltip};
 use iced::widget::{horizontal_space, pick_list, Column};
+use iced::Length::Fill;
 use iced::{Center, Element, Font, Task, Theme};
+use once_cell::sync::Lazy;
 
 // use peg;
 use makefile_lossless::Makefile;
@@ -8,6 +10,8 @@ use std::fs;
 
 use std::io;
 use std::process::Command;
+
+static SCROLLABLE_ID: Lazy<scrollable::Id> = Lazy::new(scrollable::Id::unique);
 
 pub fn main() -> iced::Result {
     iced::application("Editor - Iced", Editor::update, Editor::view)
@@ -21,6 +25,12 @@ struct Editor {
     theme: Theme,
     targets: Vec<String>,
     output: String,
+
+    scrollbar_width: u16,
+    scrollbar_margin: u16,
+    scroller_width: u16,
+    current_scroll_offset: scrollable::RelativeOffset,
+    anchor: scrollable::Anchor,
 }
 
 #[derive(Debug, Clone)]
@@ -29,6 +39,10 @@ enum Message {
     Reload,
     TaskMake(String),
     ThemeSelected(Theme),
+
+    ScrollToBeginning,
+    ScrollToEnd,
+    Scrolled(scrollable::Viewport),
 }
 
 impl Editor {
@@ -38,6 +52,12 @@ impl Editor {
                 theme: Theme::Dracula,
                 targets: Vec::new(),
                 output: String::new(),
+
+                scrollbar_width: 15,
+                scrollbar_margin: 0,
+                scroller_width: 10,
+                current_scroll_offset: scrollable::RelativeOffset::START,
+                anchor: scrollable::Anchor::Start,
             },
             Task::batch([Task::done(Message::LoadMakeTargets), widget::focus_next()]),
         )
@@ -98,6 +118,22 @@ impl Editor {
 
                 Task::none()
             }
+
+            Message::ScrollToBeginning => {
+                self.current_scroll_offset = scrollable::RelativeOffset::START;
+
+                scrollable::snap_to(SCROLLABLE_ID.clone(), self.current_scroll_offset)
+            }
+            Message::ScrollToEnd => {
+                self.current_scroll_offset = scrollable::RelativeOffset::END;
+
+                scrollable::snap_to(SCROLLABLE_ID.clone(), self.current_scroll_offset)
+            }
+            Message::Scrolled(viewport) => {
+                self.current_scroll_offset = viewport.relative_offset();
+
+                Task::none()
+            }
         }
     }
 
@@ -113,6 +149,17 @@ impl Editor {
         .align_y(Center);
 
         let status = row![].spacing(10);
+        let scroll_to_end_button = || {
+            button("Scroll to end")
+                .padding(10)
+                .on_press(Message::ScrollToEnd)
+        };
+
+        let scroll_to_beginning_button = || {
+            button("Scroll to beginning")
+                .padding(10)
+                .on_press(Message::ScrollToBeginning)
+        };
 
         let mut targets = Vec::new();
         for target in self.targets.iter() {
@@ -126,21 +173,50 @@ impl Editor {
             ));
         }
         let s = self.output.as_str();
-        let text_box: Column<Message> = column![text!("{s}").size(40)];
-        column![controls, Column::from_vec(targets), text_box, status,]
-            .spacing(10)
-            .padding(10)
-            .into()
+        let text_box: Column<Message> = column![text!("{s}").font(Font::MONOSPACE)];
+        let scrollable_content: Element<Message> = Element::from(
+            scrollable(
+                column![
+                    scroll_to_end_button(),
+                    text("Beginning!"),
+                    // vertical_space().height(1200),
+                    // text("Middle!"),
+                    text_box,
+                    // vertical_space().height(1200),
+                    text("End!"),
+                    scroll_to_beginning_button(),
+                ]
+                .align_x(Center)
+                .padding([40, 0])
+                .spacing(40),
+            )
+            .direction(scrollable::Direction::Vertical(
+                scrollable::Scrollbar::new()
+                    .width(self.scrollbar_width)
+                    .margin(self.scrollbar_margin)
+                    .scroller_width(self.scroller_width)
+                    .anchor(self.anchor),
+            ))
+            .width(Fill)
+            .height(Fill)
+            .id(SCROLLABLE_ID.clone())
+            .on_scroll(Message::Scrolled),
+        );
+
+        column![
+            controls,
+            Column::from_vec(targets),
+            scrollable_content,
+            // text_box,
+            status,
+        ]
+        .spacing(10)
+        .padding(10)
+        .into()
     }
 
     fn theme(&self) -> Theme {
-        // Theme::Dracula
         self.theme.clone()
-        // if self.theme.is_dark() {
-        //     Theme::Dark
-        // } else {
-        //     Theme::Light
-        // }
     }
 }
 
