@@ -33,21 +33,21 @@ cargo install --path .
 ```
 
 ## TODO:
-[ ] Asynchronously open Makefile
-[ ] handle multi-target Makefile rules
-[ ] support commands with streaming data
-  [ ] example: tail -f /var/log/dmesg.log
-[ ] Support additional task runner type build scripts
-  [ ] npm
-  [ ] grunt
-  [ ] taskpy
-  [ ] etc.
-[ ] switch makfile-lossless to PEG for rule target detecion
-[ ] seperate task runner support to library
-[ ] cracker-tui
-[ ] vi compatible keymapping
-[ ] add to crates.io
-[ ] CICD
+- [ ] Asynchronously open Makefile
+- [x] handle multi-target Makefile rules
+- [ ] support commands with streaming data
+  - [ ] example: tail -f /var/log/dmesg.log
+- [ ] Support additional task runner type build scripts
+  - [ ] npm
+  - [ ] grunt
+  - [ ] taskpy
+  - [ ] etc.
+- [x] switch makfile-lossless to PEG for rule target detecion
+- [ ] seperate task runner support to library
+- [ ] cracker-tui
+- [ ] hx/vi compatible keymapping
+- [ ] add to crates.io
+- [ ] CICD
 
 
 ## Motivation

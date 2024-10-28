@@ -4,11 +4,10 @@ use iced::Length::Fill;
 use iced::{Center, Element, Font, Task, Theme};
 use once_cell::sync::Lazy;
 
-// use peg;
-use makefile_lossless::Makefile;
-use std::fs;
+use std::fs::File;
+use std::io::{self, BufRead};
+use std::path::Path;
 
-use std::io;
 use std::process::Command;
 
 static SCROLLABLE_ID: Lazy<scrollable::Id> = Lazy::new(scrollable::Id::unique);
@@ -35,7 +34,7 @@ struct Editor {
 
 #[derive(Debug, Clone)]
 enum Message {
-    LoadMakeTargets,
+    LoadMakeTargetsPEG,
     Reload,
     TaskMake(String),
     ThemeSelected(Theme),
@@ -59,7 +58,10 @@ impl Editor {
                 current_scroll_offset: scrollable::RelativeOffset::START,
                 anchor: scrollable::Anchor::Start,
             },
-            Task::batch([Task::done(Message::LoadMakeTargets), widget::focus_next()]),
+            Task::batch([
+                Task::done(Message::LoadMakeTargetsPEG),
+                widget::focus_next(),
+            ]),
         )
     }
 
@@ -85,40 +87,30 @@ impl Editor {
 
                 Task::none()
             }
-            Message::Reload => Task::done(Message::LoadMakeTargets),
-            Message::LoadMakeTargets => {
-                let f = fs::File::open("Makefile").unwrap();
-                let result = Makefile::read_relaxed(f);
-                if result.is_ok() {
-                    let makefile: makefile_lossless::Makefile = result.unwrap();
-
-                    self.targets.clear();
-                    for rule in makefile.rules() {
-                        if rule.to_string().contains(" :") {
-                            println!("multi target rules unsupported for now");
-                            println!("{}", rule);
-                            continue;
+            Message::Reload => Task::done(Message::LoadMakeTargetsPEG),
+            Message::LoadMakeTargetsPEG => {
+                println!("in LoadMake targets PEG");
+                peg::parser!(grammar parse() for str {
+                   #[no_eof]
+                   pub rule Targets() -> Vec<String> = a:Target()++ " " ":"!"=" { a }
+                       rule Target() -> String = Spacing() a:['a'..='z'|'A'..='Z'] t:['a'..='z'|'A'..='Z'|'_']+ {
+                            let res: String = [a].iter().chain(&t).collect();
+                           res
+                       }
+                       rule Spacing() = quiet!{[' ']*}
+                });
+                self.targets.clear();
+                if let Ok(lines) = read_lines("Makefile") {
+                    for line in lines.map_while(Result::ok) {
+                        let target = parse::Targets(line.as_str());
+                        if let Ok(t) = target {
+                            self.targets.extend(t);
                         }
-                        rule.targets()
-                            .filter(|target| !target.starts_with("_"))
-                            .for_each(|target| self.targets.push(target));
-                        // for target in rule.targets() {
-                        //     println!("{}", target);
-                        //     self.targets.push(target);
-                        // }
                     }
                 }
 
-                // peg::parser!{
-                //     grammar list_parser() for str {
-                //         rule number() -> u32
-                //         = "[" l:(number() ** ",") "]" {l}
-                //     }
-                // }
-
                 Task::none()
             }
-
             Message::ScrollToBeginning => {
                 self.current_scroll_offset = scrollable::RelativeOffset::START;
 
@@ -222,6 +214,14 @@ impl Editor {
 pub enum Error {
     DialogClosed,
     IoError(io::ErrorKind),
+}
+
+fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
+where
+    P: AsRef<Path>,
+{
+    let file = File::open(filename)?;
+    Ok(io::BufReader::new(file).lines())
 }
 
 fn target_card<'a, Message: Clone + 'a>(
