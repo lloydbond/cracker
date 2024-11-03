@@ -1,12 +1,15 @@
 use iced::widget::{self, button, column, container, row, scrollable, text, tooltip};
 use iced::widget::{horizontal_space, pick_list, Column};
 use iced::Length::Fill;
-use iced::{Center, Element, Font, Task, Theme};
+use iced::{Center, Element, Font, Result, Task, Theme};
 use once_cell::sync::Lazy;
 
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
+
+use tokio::fs::File;
+use tokio::io::{self, AsyncBufReadExt, Lines};
 
 use std::process::Command;
 
@@ -100,7 +103,7 @@ impl Editor {
                        rule Spacing() = quiet!{[' ']*}
                 });
                 self.targets.clear();
-                if let Ok(lines) = read_lines("Makefile") {
+                if let Ok(lines) = async_read_lines("Makefile").await? {
                     for line in lines.map_while(Result::ok) {
                         let target = parse::Targets(line.as_str());
                         if let Ok(t) = target {
@@ -216,11 +219,20 @@ pub enum Error {
     IoError(io::ErrorKind),
 }
 
-fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
+fn read_lines<P>(filename: P) -> std::io::Result<std::io::Lines<std::io::BufReader<std::fs::File>>>
 where
     P: AsRef<Path>,
 {
-    let file = File::open(filename)?;
+    let file = std::fs::File::open(filename)?;
+    Ok(std::io::BufReader::new(file).lines())
+}
+
+async fn async_read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
+where
+    P: AsRef<Path>,
+{
+    let file = File::open(filename).await?;
+
     Ok(io::BufReader::new(file).lines())
 }
 
