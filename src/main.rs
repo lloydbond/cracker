@@ -1,3 +1,5 @@
+use cracker::*;
+
 use iced::widget::{self, button, column, container, row, scrollable, text, tooltip};
 use iced::widget::{horizontal_space, pick_list, Column};
 use iced::Length::Fill;
@@ -90,19 +92,10 @@ impl Editor {
             Message::Reload => Task::done(Message::LoadMakeTargetsPEG),
             Message::LoadMakeTargetsPEG => {
                 println!("in LoadMake targets PEG");
-                peg::parser!(grammar parse() for str {
-                   #[no_eof]
-                   pub rule Targets() -> Vec<String> = a:Target()++ " " ":"!"=" { a }
-                       rule Target() -> String = Spacing() a:['a'..='z'|'A'..='Z'] t:['a'..='z'|'A'..='Z'|'_']+ {
-                            let res: String = [a].iter().chain(&t).collect();
-                           res
-                       }
-                       rule Spacing() = quiet!{[' ']*}
-                });
                 self.targets.clear();
                 if let Ok(lines) = read_lines("Makefile") {
                     for line in lines.map_while(Result::ok) {
-                        let target = parse::Targets(line.as_str());
+                        let target = makefile::Targets(line.as_str());
                         if let Ok(t) = target {
                             self.targets.extend(t);
                         }
