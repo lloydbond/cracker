@@ -47,7 +47,7 @@ cargo install --path .
 - [ ] cracker-tui
 - [ ] hx/vi compatible keymapping
 - [ ] add to crates.io
-- [ ] CICD
+- [x] CICD
 
 
 ## Motivation
