@@ -1,3 +1,9 @@
+[v0.3.0] 2024-11-03
+-------------------
+
+-   Seperate PEG parser to a library for future abstraction
+-   Initial library tests
+
 [v0.2.0] 2024-10-19
 -------------------
 
