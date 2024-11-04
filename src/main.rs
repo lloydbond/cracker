@@ -1,6 +1,7 @@
 use cracker::*;
 
-use iced::widget::{self, button, column, container, row, scrollable, text, tooltip};
+use iced::alignment::Horizontal::Left;
+use iced::widget::{self, button, column, container, row, scrollable, text, tooltip, Scrollable};
 use iced::widget::{horizontal_space, pick_list, Column};
 use iced::Length::Fill;
 use iced::{Center, Element, Font, Task, Theme};
@@ -165,7 +166,7 @@ impl Editor {
         }
         let text_box: Column<Message> =
             column![text!("{}", self.output.as_str()).font(Font::MONOSPACE)];
-        let scrollable_content: Element<Message> = Element::from(
+        let scrollable_stdout: Element<Message> = Element::from(
             scrollable(
                 column![text_box,]
                     .align_x(Center)
@@ -185,11 +186,33 @@ impl Editor {
             .on_scroll(Message::Scrolled),
         );
 
+        let scrollable_targets: Element<Message> = Element::from(
+            scrollable(
+                Column::from_vec(targets)
+                    // column![text_box,]
+                    .align_x(Left)
+                    .padding([10, 0])
+                    .spacing(10),
+            )
+            .direction(scrollable::Direction::Vertical(
+                scrollable::Scrollbar::new()
+                    .width(0)
+                    .margin(0)
+                    .scroller_width(0)
+                    .anchor(self.anchor),
+            ))
+            // .width(Fill)
+            .height(Fill)
+            .id(SCROLLABLE_ID.clone())
+            .on_scroll(Message::Scrolled),
+        );
+
+        let row_of_scrollables = row![scrollable_targets, scrollable_stdout,];
+
         column![
             controls,
-            Column::from_vec(targets),
             controls_output,
-            scrollable_content,
+            row_of_scrollables,
             // text_box,
             status,
         ]
@@ -221,9 +244,9 @@ fn target_card<'a, Message: Clone + 'a>(
     action: Element<'a, Message>,
     label: &'a str,
 ) -> Element<'a, Message> {
-    container(row![action, label].spacing(10))
+    container(row![action, label].spacing(1))
         .style(container::bordered_box)
-        .padding(10)
+        .padding(1)
         .into()
 }
 
@@ -232,7 +255,7 @@ fn action<'a, Message: Clone + 'a>(
     label: &'a str,
     on_press: Option<Message>,
 ) -> Element<'a, Message> {
-    let action = button(container(content).center_x(30));
+    let action = button(container(content).center_x(10));
 
     if let Some(on_press) = on_press {
         tooltip(
