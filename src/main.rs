@@ -1,15 +1,16 @@
 use cracker::*;
 
 use iced::alignment::Horizontal::Left;
-use iced::widget::{self, button, column, container, row, scrollable, text, tooltip, Scrollable};
+use iced::widget::{self, button, column, container, row, scrollable, text, tooltip};
 use iced::widget::{horizontal_space, pick_list, Column};
 use iced::Length::Fill;
 use iced::{Center, Element, Font, Task, Theme};
 use once_cell::sync::Lazy;
 
-use std::fs::File;
-use std::io::{self, BufRead};
 use std::path::Path;
+use std::sync::Arc;
+
+use tokio::io::{self};
 
 use std::process::Command;
 
@@ -37,6 +38,7 @@ struct Editor {
 
 #[derive(Debug, Clone)]
 enum Message {
+    ParseMakeTargets(std::result::Result<Arc<String>, Error>),
     LoadMakeTargetsPEG,
     Reload,
     TaskMake(String),
@@ -81,8 +83,6 @@ impl Editor {
                     .output()
                     .unwrap_or_else(|e| panic!("failed to execute process: {}", e));
                 if output.status.success() {
-                    // let s = String::from_utf8_lossy(&output.stdout).into_owned();
-
                     self.output = String::from_utf8_lossy(&output.stdout).into_owned();
                 } else {
                     self.output = String::from_utf8_lossy(&output.stderr).into_owned();
@@ -94,15 +94,17 @@ impl Editor {
             Message::LoadMakeTargetsPEG => {
                 println!("in LoadMake targets PEG");
                 self.targets.clear();
-                if let Ok(lines) = read_lines("Makefile") {
-                    for line in lines.map_while(Result::ok) {
-                        let target = makefile::Targets(line.as_str());
+                Task::perform(async_read_lines("Makefile"), Message::ParseMakeTargets)
+            }
+            Message::ParseMakeTargets(result) => {
+                if let Ok(contents) = result {
+                    for line in contents.lines() {
+                        let target = makefile::Targets(line);
                         if let Ok(t) = target {
                             self.targets.extend(t);
                         }
                     }
                 }
-
                 Task::none()
             }
             Message::ScrollToBeginning => {
@@ -232,12 +234,16 @@ pub enum Error {
     IoError(io::ErrorKind),
 }
 
-fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
+async fn async_read_lines<P>(filename: P) -> Result<Arc<String>, Error>
 where
     P: AsRef<Path>,
 {
-    let file = File::open(filename)?;
-    Ok(io::BufReader::new(file).lines())
+    let contents = tokio::fs::read_to_string(filename)
+        .await
+        .map(Arc::new)
+        .map_err(|error| Error::IoError(error.kind()))?;
+
+    Ok(contents)
 }
 
 fn target_card<'a, Message: Clone + 'a>(
