@@ -1,3 +1,15 @@
+[v0.4.0] 2024-11-04
+-------------------
+
+-   changed layout of targets and the stdout to a row instead of one column.
+-   cleaned up targets button size / padding / and alignment
+
+[v0.3.0] 2024-11-03
+-------------------
+
+-   Seperate PEG parser to a library for future abstraction
+-   Initial library tests
+
 [v0.2.0] 2024-10-19
 -------------------
 
