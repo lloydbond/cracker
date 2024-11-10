@@ -4,7 +4,7 @@ use iced::alignment::Horizontal::Left;
 use iced::widget::{self, button, column, container, row, scrollable, text, tooltip};
 use iced::widget::{horizontal_space, pick_list, Column};
 use iced::Length::Fill;
-use iced::{Center, Element, Font, Task, Theme};
+use iced::{Center, Element, Font, Subscription, Task, Theme};
 use once_cell::sync::Lazy;
 
 use std::path::Path;
@@ -12,12 +12,13 @@ use std::sync::Arc;
 
 use tokio::io::{self};
 
-use std::process::Command;
+use tokio::process::Command;
 
 static SCROLLABLE_ID: Lazy<scrollable::Id> = Lazy::new(scrollable::Id::unique);
 
 pub fn main() -> iced::Result {
     iced::application("Editor - Iced", Editor::update, Editor::view)
+        .subscription(Editor::subscription)
         .theme(Editor::theme)
         .font(include_bytes!("../fonts/editor-icons.ttf").as_slice())
         .default_font(Font::MONOSPACE)
@@ -38,11 +39,12 @@ struct Editor {
 
 #[derive(Debug, Clone)]
 enum Message {
-    ParseMakeTargets(std::result::Result<Arc<String>, Error>),
     LoadMakeTargetsPEG,
+    ParseMakeTargets(std::result::Result<Arc<String>, Error>),
     Reload,
     TaskMake(String),
     ThemeSelected(Theme),
+    UpdateStdout(std::result::Result<Arc<String>, Error>),
 
     ScrollToBeginning,
     ScrollToEnd,
@@ -78,17 +80,9 @@ impl Editor {
                 Task::none()
             }
             Message::TaskMake(target) => {
-                let output = Command::new("make")
-                    .arg(target)
-                    .output()
-                    .unwrap_or_else(|e| panic!("failed to execute process: {}", e));
-                if output.status.success() {
-                    self.output = String::from_utf8_lossy(&output.stdout).into_owned();
-                } else {
-                    self.output = String::from_utf8_lossy(&output.stderr).into_owned();
-                }
-
-                Task::none()
+                println!("in task make");
+                // Task::perform(, )
+                Task::perform(async_start_make_cmd(target.clone()), Message::UpdateStdout)
             }
             Message::Reload => Task::done(Message::LoadMakeTargetsPEG),
             Message::LoadMakeTargetsPEG => {
@@ -107,6 +101,16 @@ impl Editor {
                 }
                 Task::none()
             }
+
+            Message::UpdateStdout(result) => {
+                println!("updating");
+                self.output.clear();
+                if let Ok(content) = result {
+                    self.output.push_str(&content);
+                }
+                Task::none()
+            }
+
             Message::ScrollToBeginning => {
                 self.current_scroll_offset = scrollable::RelativeOffset::START;
 
@@ -123,6 +127,10 @@ impl Editor {
                 Task::none()
             }
         }
+    }
+    fn subscription(&self) -> Subscription<Message> {
+        println!("{:?}", "in subscription");
+        Subscription::none()
     }
 
     fn view(&self) -> Element<Message> {
@@ -233,7 +241,21 @@ pub enum Error {
     DialogClosed,
     IoError(io::ErrorKind),
 }
+async fn async_start_make_cmd(target: String) -> Result<Arc<String>, Error> {
+    let output = Command::new("make").arg(target).output();
+    let output = output
+        .await
+        .map(|o| {
+            if o.status.success() {
+                return Arc::new(String::from_utf8_lossy(&o.stdout).into_owned());
+            } else {
+                return Arc::new(String::from_utf8_lossy(&o.stderr).into_owned());
+            }
+        })
+        .map_err(|error| Error::IoError(error.kind()))?;
 
+    Ok(output)
+}
 async fn async_read_lines<P>(filename: P) -> Result<Arc<String>, Error>
 where
     P: AsRef<Path>,
