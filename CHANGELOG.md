@@ -1,3 +1,9 @@
+[v0.5.0] 2024-11-04
+-------------------
+
+-   long running stdio output now supported (tail -f file.log)
+-   slight layout improvement
+
 [v0.4.0] 2024-11-04
 -------------------
 
