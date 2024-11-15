@@ -87,7 +87,6 @@ impl Editor {
                 Task::none()
             }
             Message::TaskMake(target) => {
-                println!("in task make");
                 let id = self.next_id;
                 self.next_id += 1;
                 for ele in self.tasks.iter_mut() {
@@ -98,8 +97,6 @@ impl Editor {
                 Task::done(Message::TaskStart(id))
             }
             Message::TaskStart(id) => {
-                println!("in task start");
-
                 if let Some(task) = self.tasks.get_mut(id) {
                     task.start();
                 }
@@ -115,7 +112,6 @@ impl Editor {
             Message::TaskStop => Task::none(),
             Message::Reload => Task::done(Message::LoadMakeTargetsPEG),
             Message::LoadMakeTargetsPEG => {
-                println!("in LoadMake targets PEG");
                 self.targets.clear();
                 Task::perform(async_read_lines("Makefile"), Message::ParseMakeTargets)
             }
@@ -149,14 +145,6 @@ impl Editor {
         }
     }
     fn subscription(&self) -> Subscription<Message> {
-        println!("{:?}", "in subscription");
-        // fn handle_hotkey(key: keyboard::Key, _modifiers: keyboard::Modifiers) -> Option<Message> {
-        //     match key.as_ref() {
-        //         keyboard::Key::Character("q") => Some(Message::TaskStop),
-        //         _ => None,
-        //     }
-        // }
-
         if self.tasks.is_empty() {
             return Subscription::none();
         }
@@ -204,8 +192,6 @@ impl Editor {
                 target,
             ));
         }
-        // let text_box: Column<Message> =
-        //     column![text!("{}", self.output.as_str()).font(Font::MONOSPACE)];
         let text_box: Column<Message> =
             Column::with_children(self.tasks.iter().map(StdOutput::view));
         let scrollable_stdout: Element<Message> = Element::from(
@@ -367,7 +353,6 @@ impl StdOutput {
     }
 
     pub fn start(&mut self) {
-        println!("task.start called {:?}", self.state);
         match self.state {
             State::Idle { .. } | State::Finished { .. } | State::Errored { .. } => {
                 self.state = State::Streaming {
@@ -379,23 +364,19 @@ impl StdOutput {
     }
 
     pub fn stop(&mut self) {
-        println!("task.stop state: {:?}", self.state);
         self.state = State::Finished;
     }
     pub fn stream_update(&mut self, output_update: Result<stdout::Stdout, stdout::Error>) {
         if let State::Streaming { stream } = &mut self.state {
             match output_update {
                 Ok(stdout::Stdout::OutputUpdate { output }) => {
-                    println!("stream: {stream:?} ouput: {output:?}");
                     self.output.push_str(output.as_str());
                     self.output.push('\n');
                     *stream = output
                 }
                 Ok(stdout::Stdout::Finished) => {
-                    println!("stream finished");
                     self.state = State::Finished;
                 }
-                // Ok(stdout::Stdout::Ready { sender }) => {sender = sender}
                 Ok(stdout::Stdout::Prepare { output }) => *stream = output,
                 Err(stdout::Error::NoContent) => {
                     self.state = State::Errored;
@@ -408,10 +389,8 @@ impl StdOutput {
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
-        println!("in stdout sub,{:?} ", &self.state);
         match self.state {
             State::Streaming { .. } => {
-                println!("in stdout sub, in state");
                 stdout::subscription(self.id, self.target.clone()).map(Message::TaskUpdate)
             }
             _ => Subscription::none(),
@@ -426,7 +405,6 @@ impl StdOutput {
             State::Finished { .. } => String::from("Finished..."),
             State::Errored { .. } => String::from("Errored..."),
         };
-        // println!("{:?}", output);
 
         let text_box: Column<Message> = column![text!("{}", self.output).font(Font::MONOSPACE)];
 

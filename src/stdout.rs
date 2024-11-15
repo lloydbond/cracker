@@ -41,7 +41,6 @@ pub fn subscription<I: 'static + Hash + Copy + Send + Sync>(
     id: I,
     target: String,
 ) -> Subscription<(I, Result<Stdout, Error>)> {
-    println!("stdout::subscription");
     Subscription::run_with_id(
         id,
         some_worker(target.clone()).map(move |output| (id, output)),
@@ -49,14 +48,12 @@ pub fn subscription<I: 'static + Hash + Copy + Send + Sync>(
 }
 
 pub fn some_worker(target: String) -> impl Stream<Item = Result<Stdout, Error>> {
-    println!("try channel {:?}", target.clone());
     try_channel(1, |mut output| async move {
         // Create channel
         // let (sender, mut receiver) = mpsc::channel(1);
 
         // Send the sender back to the application
         // output.send(Stdout::Ready { sender }).await;
-        println!("in try channel {:?}", target.clone());
         let _ = output
             .send(Stdout::OutputUpdate {
                 output: String::from(""),
@@ -83,18 +80,15 @@ pub fn some_worker(target: String) -> impl Stream<Item = Result<Stdout, Error>> 
             .stdout
             .take()
             .expect("child did not have a handle to stdout");
-        println!("stdout created");
         let mut reader = BufReader::new(stdout).lines();
         while let result = reader.next_line().await {
             use iced::futures::StreamExt;
             match result {
                 Ok(line) => match line {
                     Some(l) => {
-                        println!("{}", l.clone());
                         let _ = output.send(Stdout::OutputUpdate { output: l }).await;
                     }
                     None => {
-                        println!("file output finished!");
                         break;
                     }
                 },
@@ -103,15 +97,6 @@ pub fn some_worker(target: String) -> impl Stream<Item = Result<Stdout, Error>> 
                     // output.send(Error::Failed(Arc::new(Error::from("error"))));
                 }
             }
-            // Read next input sent from `Application`
-            // let _ = receiver.select_next_some().await;
-
-            // match input {
-            //     Input::Cancel => {
-            //         // Do some cleanup work...
-            //         break;
-            //     }
-            // }
         }
         let _ = output.send(Stdout::Finished).await;
 
