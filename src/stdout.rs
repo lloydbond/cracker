@@ -1,3 +1,4 @@
+use iced::futures::channel::mpsc;
 use iced::futures::{SinkExt, Stream, StreamExt};
 use iced::stream::try_channel;
 use iced::Subscription;

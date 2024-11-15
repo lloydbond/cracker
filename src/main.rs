@@ -90,6 +90,9 @@ impl Editor {
                 println!("in task make");
                 let id = self.next_id;
                 self.next_id += 1;
+                for ele in self.tasks.iter_mut() {
+                    ele.stop();
+                }
                 self.tasks.push(StdOutput::new(id, target));
 
                 Task::done(Message::TaskStart(id))
@@ -375,6 +378,10 @@ impl StdOutput {
         }
     }
 
+    pub fn stop(&mut self) {
+        println!("task.stop state: {:?}", self.state);
+        self.state = State::Finished;
+    }
     pub fn stream_update(&mut self, output_update: Result<stdout::Stdout, stdout::Error>) {
         if let State::Streaming { stream } = &mut self.state {
             match output_update {
