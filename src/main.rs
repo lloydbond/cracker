@@ -29,7 +29,6 @@ pub fn main() -> iced::Result {
 struct Editor {
     theme: Theme,
     targets: Vec<String>,
-    output: String,
     tasks: Vec<StdOutput>,
     next_id: usize,
 
@@ -60,9 +59,8 @@ impl Editor {
     fn new() -> (Self, Task<Message>) {
         (
             Self {
-                theme: Theme::Dracula,
+                theme: Theme::CatppuccinMocha,
                 targets: Vec::new(),
-                output: String::new(),
                 tasks: Vec::new(),
                 next_id: 0,
 
@@ -198,7 +196,7 @@ impl Editor {
             scrollable(
                 column![text_box,]
                     .align_x(Center)
-                    .padding([40, 0])
+                    .padding([40, 40])
                     .spacing(40),
             )
             .direction(scrollable::Direction::Vertical(
