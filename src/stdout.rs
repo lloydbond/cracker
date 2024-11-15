@@ -84,14 +84,12 @@ pub fn some_worker(target: String) -> impl Stream<Item = Result<Stdout, Error>> 
             .expect("child did not have a handle to stdout");
         println!("stdout created");
         let mut reader = BufReader::new(stdout).lines();
-        loop {
+        while let result = reader.next_line().await {
             use iced::futures::StreamExt;
-            println!("in loop");
-            let result = reader.next_line().await;
             match result {
                 Ok(line) => match line {
                     Some(l) => {
-                        println!("Line: {}", l.clone());
+                        println!("{}", l.clone());
                         let _ = output.send(Stdout::OutputUpdate { output: l }).await;
                     }
                     None => {

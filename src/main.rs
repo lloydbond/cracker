@@ -378,7 +378,12 @@ impl StdOutput {
     pub fn stream_update(&mut self, output_update: Result<stdout::Stdout, stdout::Error>) {
         if let State::Streaming { stream } = &mut self.state {
             match output_update {
-                Ok(stdout::Stdout::OutputUpdate { output }) => *stream = output,
+                Ok(stdout::Stdout::OutputUpdate { output }) => {
+                    println!("stream: {stream:?} ouput: {output:?}");
+                    self.output.push_str(output.as_str());
+                    self.output.push('\n');
+                    *stream = output
+                }
                 Ok(stdout::Stdout::Finished) => {
                     println!("stream finished");
                     self.state = State::Finished;
@@ -414,9 +419,9 @@ impl StdOutput {
             State::Finished { .. } => String::from("Finished..."),
             State::Errored { .. } => String::from("Errored..."),
         };
-        println!("{:?}", output);
+        // println!("{:?}", output);
 
-        let text_box: Column<Message> = column![text!("{}", output).font(Font::MONOSPACE)];
+        let text_box: Column<Message> = column![text!("{}", self.output).font(Font::MONOSPACE)];
 
         text_box.into()
     }
