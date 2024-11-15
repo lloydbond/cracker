@@ -1,18 +1,18 @@
+mod stdout;
 use cracker::*;
 
 use iced::alignment::Horizontal::Left;
-use iced::widget::{self, button, column, container, row, scrollable, text, tooltip};
+use iced::widget::{self, button, center, column, container, row, scrollable, text, tooltip};
 use iced::widget::{horizontal_space, pick_list, Column};
+use iced::Alignment::Center;
 use iced::Length::Fill;
-use iced::{Center, Element, Font, Subscription, Task, Theme};
+use iced::{Element, Font, Subscription, Task, Theme};
 use once_cell::sync::Lazy;
+use tokio::{fs, io};
 
+use std::fmt::Debug;
 use std::path::Path;
 use std::sync::Arc;
-
-use tokio::io::{self};
-
-use tokio::process::Command;
 
 static SCROLLABLE_ID: Lazy<scrollable::Id> = Lazy::new(scrollable::Id::unique);
 
@@ -25,10 +25,13 @@ pub fn main() -> iced::Result {
         .run_with(Editor::new)
 }
 
+#[derive(Debug)]
 struct Editor {
     theme: Theme,
     targets: Vec<String>,
     output: String,
+    tasks: Vec<StdOutput>,
+    next_id: usize,
 
     scrollbar_width: u16,
     scrollbar_margin: u16,
@@ -38,13 +41,15 @@ struct Editor {
 }
 
 #[derive(Debug, Clone)]
-enum Message {
+pub enum Message {
     LoadMakeTargetsPEG,
     ParseMakeTargets(std::result::Result<Arc<String>, Error>),
     Reload,
     TaskMake(String),
+    TaskStart(usize),
+    TaskUpdate((usize, Result<stdout::Stdout, stdout::Error>)),
+    TaskStop,
     ThemeSelected(Theme),
-    UpdateStdout(std::result::Result<Arc<String>, Error>),
 
     ScrollToBeginning,
     ScrollToEnd,
@@ -58,6 +63,8 @@ impl Editor {
                 theme: Theme::Dracula,
                 targets: Vec::new(),
                 output: String::new(),
+                tasks: Vec::new(),
+                next_id: 0,
 
                 scrollbar_width: 15,
                 scrollbar_margin: 0,
@@ -81,9 +88,28 @@ impl Editor {
             }
             Message::TaskMake(target) => {
                 println!("in task make");
-                // Task::perform(, )
-                Task::perform(async_start_make_cmd(target.clone()), Message::UpdateStdout)
+                let id = self.next_id;
+                self.next_id += 1;
+                self.tasks.push(StdOutput::new(id, target));
+
+                Task::done(Message::TaskStart(id))
             }
+            Message::TaskStart(id) => {
+                println!("in task start");
+
+                if let Some(task) = self.tasks.get_mut(id) {
+                    task.start();
+                }
+
+                Task::none()
+            }
+            Message::TaskUpdate((id, output)) => {
+                if let Some(task) = self.tasks.get_mut(id) {
+                    task.stream_update(output);
+                }
+                Task::none()
+            }
+            Message::TaskStop => Task::none(),
             Message::Reload => Task::done(Message::LoadMakeTargetsPEG),
             Message::LoadMakeTargetsPEG => {
                 println!("in LoadMake targets PEG");
@@ -98,15 +124,6 @@ impl Editor {
                             self.targets.extend(t);
                         }
                     }
-                }
-                Task::none()
-            }
-
-            Message::UpdateStdout(result) => {
-                println!("updating");
-                self.output.clear();
-                if let Ok(content) = result {
-                    self.output.push_str(&content);
                 }
                 Task::none()
             }
@@ -130,7 +147,17 @@ impl Editor {
     }
     fn subscription(&self) -> Subscription<Message> {
         println!("{:?}", "in subscription");
-        Subscription::none()
+        // fn handle_hotkey(key: keyboard::Key, _modifiers: keyboard::Modifiers) -> Option<Message> {
+        //     match key.as_ref() {
+        //         keyboard::Key::Character("q") => Some(Message::TaskStop),
+        //         _ => None,
+        //     }
+        // }
+
+        if self.tasks.is_empty() {
+            return Subscription::none();
+        }
+        Subscription::batch(self.tasks.iter().map(StdOutput::subscription))
     }
 
     fn view(&self) -> Element<Message> {
@@ -169,13 +196,15 @@ impl Editor {
                 action(
                     start_icon(),
                     target,
-                    Some(Message::TaskMake(target.to_string())),
+                    Some(Message::TaskMake(target.clone())),
                 ),
                 target,
             ));
         }
+        // let text_box: Column<Message> =
+        //     column![text!("{}", self.output.as_str()).font(Font::MONOSPACE)];
         let text_box: Column<Message> =
-            column![text!("{}", self.output.as_str()).font(Font::MONOSPACE)];
+            Column::with_children(self.tasks.iter().map(StdOutput::view));
         let scrollable_stdout: Element<Message> = Element::from(
             scrollable(
                 column![text_box,]
@@ -241,26 +270,12 @@ pub enum Error {
     DialogClosed,
     IoError(io::ErrorKind),
 }
-async fn async_start_make_cmd(target: String) -> Result<Arc<String>, Error> {
-    let output = Command::new("make").arg(target).output();
-    let output = output
-        .await
-        .map(|o| {
-            if o.status.success() {
-                return Arc::new(String::from_utf8_lossy(&o.stdout).into_owned());
-            } else {
-                return Arc::new(String::from_utf8_lossy(&o.stderr).into_owned());
-            }
-        })
-        .map_err(|error| Error::IoError(error.kind()))?;
 
-    Ok(output)
-}
 async fn async_read_lines<P>(filename: P) -> Result<Arc<String>, Error>
 where
     P: AsRef<Path>,
 {
-    let contents = tokio::fs::read_to_string(filename)
+    let contents = fs::read_to_string(filename)
         .await
         .map(Arc::new)
         .map_err(|error| Error::IoError(error.kind()))?;
@@ -318,4 +333,91 @@ fn icon<'a, Message>(codepoint: char) -> Element<'a, Message> {
     const ICON_FONT: Font = Font::with_name("editor-icons");
 
     text(codepoint).font(ICON_FONT).into()
+}
+
+// StdOutput
+#[derive(Debug)]
+struct StdOutput {
+    id: usize,
+    target: String,
+    state: State,
+    output: String,
+    // sender: mpsc::Sender<Input>,
+}
+
+#[derive(Debug, Clone)]
+enum State {
+    Idle,
+    Streaming { stream: String },
+    Finished,
+    Errored,
+}
+
+impl StdOutput {
+    pub fn new(id: usize, target: String) -> Self {
+        Self {
+            id,
+            target,
+            state: State::Idle,
+            output: String::new(),
+        }
+    }
+
+    pub fn start(&mut self) {
+        println!("task.start called {:?}", self.state);
+        match self.state {
+            State::Idle { .. } | State::Finished { .. } | State::Errored { .. } => {
+                self.state = State::Streaming {
+                    stream: String::from("Stream started..."),
+                };
+            }
+            State::Streaming { .. } => {}
+        }
+    }
+
+    pub fn stream_update(&mut self, output_update: Result<stdout::Stdout, stdout::Error>) {
+        if let State::Streaming { stream } = &mut self.state {
+            match output_update {
+                Ok(stdout::Stdout::OutputUpdate { output }) => *stream = output,
+                Ok(stdout::Stdout::Finished) => {
+                    println!("stream finished");
+                    self.state = State::Finished;
+                }
+                // Ok(stdout::Stdout::Ready { sender }) => {sender = sender}
+                Ok(stdout::Stdout::Prepare { output }) => *stream = output,
+                Err(stdout::Error::NoContent) => {
+                    self.state = State::Errored;
+                }
+                Err(stdout::Error::Failed) => {
+                    self.state = State::Errored;
+                }
+            }
+        }
+    }
+
+    pub fn subscription(&self) -> Subscription<Message> {
+        println!("in stdout sub,{:?} ", &self.state);
+        match self.state {
+            State::Streaming { .. } => {
+                println!("in stdout sub, in state");
+                stdout::subscription(self.id, self.target.clone()).map(Message::TaskUpdate)
+            }
+            _ => Subscription::none(),
+        }
+    }
+
+    pub fn view(&self) -> Element<Message> {
+        let output = match &self.state {
+            State::Idle { .. } => String::from("Press start..."),
+
+            State::Streaming { stream } => (*stream).clone(),
+            State::Finished { .. } => String::from("Finished..."),
+            State::Errored { .. } => String::from("Errored..."),
+        };
+        println!("{:?}", output);
+
+        let text_box: Column<Message> = column![text!("{}", output).font(Font::MONOSPACE)];
+
+        text_box.into()
+    }
 }
