@@ -388,7 +388,7 @@ impl StdOutput {
                 Err(stdout::Error::NoContent) => {
                     self.state = State::Errored;
                 }
-                Err(stdout::Error::Failed) => {
+                Err(stdout::Error::Failed(_)) => {
                     self.state = State::Errored;
                 }
             }
