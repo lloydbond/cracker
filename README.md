@@ -33,10 +33,10 @@ cargo install --path .
 ```
 
 ## TODO:
-- [ ] Asynchronously open Makefile
+- [x] Asynchronously open Makefile
 - [x] handle multi-target Makefile rules
-- [ ] support commands with streaming data
-  - [ ] example: tail -f /var/log/dmesg.log
+- [x] support commands with streaming data
+  - [x] example: tail -f /var/log/dmesg.log
 - [ ] Support additional task runner type build scripts
   - [ ] npm
   - [ ] grunt
