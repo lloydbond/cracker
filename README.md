@@ -43,7 +43,7 @@ cargo install --path .
   - [ ] taskpy
   - [ ] etc.
 - [x] switch makfile-lossless to PEG for rule target detecion
-- [ ] seperate task runner support to library
+- [x] seperate task runner support to library
 - [ ] cracker-tui
 - [ ] hx/vi compatible keymapping
 - [ ] add to crates.io
