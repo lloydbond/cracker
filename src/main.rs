@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate log;
+
 mod task_runners;
 mod utils;
 
@@ -17,6 +20,8 @@ use std::sync::Arc;
 static SCROLLABLE_ID: Lazy<scrollable::Id> = Lazy::new(scrollable::Id::unique);
 
 pub fn main() -> iced::Result {
+    sensible_env_logger::init!();
+    debug!("start ck");
     iced::application("Editor - Iced", Editor::update, Editor::view)
         .subscription(Editor::subscription)
         .theme(Editor::theme)
@@ -87,8 +92,9 @@ impl Editor {
             Message::TaskMake(target) => {
                 let id = self.next_id;
                 self.next_id += 1;
-                for ele in self.tasks.iter_mut() {
-                    ele.stop();
+                for task in self.tasks.iter_mut() {
+                    task.stop();
+                    debug!("task ({:?}) stopped", task.target());
                 }
                 self.tasks.push(StdOutput::new(id, target));
 
@@ -97,6 +103,7 @@ impl Editor {
             Message::TaskStart(id) => {
                 if let Some(task) = self.tasks.get_mut(id) {
                     task.start();
+                    debug!("task ({:?}) started", task.target());
                 }
 
                 Task::none()
@@ -121,6 +128,7 @@ impl Editor {
                             self.targets.extend(t);
                         }
                     }
+                    debug!("Found targets: {:?}", self.targets);
                 }
                 Task::none()
             }
@@ -331,6 +339,9 @@ impl StdOutput {
             output: String::new(),
         }
     }
+    pub fn target(&self) -> String {
+        self.target.clone()
+    }
 
     pub fn start(&mut self) {
         match self.state {
@@ -371,6 +382,7 @@ impl StdOutput {
     pub fn subscription(&self) -> Subscription<Message> {
         match self.state {
             State::Streaming { .. } => {
+                debug!("{:?} subscribed", self.target.clone());
                 worker::subscription(self.id, self.target.clone()).map(Message::TaskUpdate)
             }
             _ => Subscription::none(),

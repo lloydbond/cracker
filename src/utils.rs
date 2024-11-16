@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::{fs, io};
@@ -9,12 +10,13 @@ pub enum Error {
 
 pub async fn async_read_lines<P>(filename: P) -> Result<Arc<String>, Error>
 where
-    P: AsRef<Path>,
+    P: AsRef<Path> + Debug + Clone + Copy,
 {
     let contents = fs::read_to_string(filename)
         .await
         .map(Arc::new)
         .map_err(|error| Error::IoError(error.kind()))?;
+    debug!("makefile ({filename:#?}) loaded");
 
     Ok(contents)
 }
@@ -24,7 +26,6 @@ mod tests {
     use std::io::ErrorKind;
 
     use super::*;
-    use tokio;
 
     #[tokio::test]
     async fn test_file_not_found() {

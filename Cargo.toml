@@ -14,10 +14,14 @@ path = "src/main.rs"
 
 [dependencies]
 iced = {version = "0.13.1", features = ["debug", "tokio", "highlighter", "lazy"]}
+log = "0.4.22"
 once_cell = "1.20.2"
 peg = "0.8.4"
+sensible-env-logger = "0.3.2"
 tokio = {version = "1", features = ["fs", "process", "io-util"]}
 
 
 [dev-dependencies]
+log = "0.4.22"
+sensible-env-logger = "0.3.2"
 tokio = {version = "1", features = [ "macros"]}
