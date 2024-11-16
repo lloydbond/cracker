@@ -1,22 +1,27 @@
-mod stdout;
-use cracker::*;
+#[macro_use]
+extern crate log;
+
+mod task_runners;
+mod utils;
 
 use iced::alignment::Horizontal::Left;
-use iced::widget::{self, button, center, column, container, row, scrollable, text, tooltip};
+use iced::widget::{self, button, column, container, row, scrollable, text, tooltip};
 use iced::widget::{horizontal_space, pick_list, Column};
 use iced::Alignment::Center;
 use iced::Length::Fill;
 use iced::{Element, Font, Subscription, Task, Theme};
 use once_cell::sync::Lazy;
-use tokio::{fs, io};
+use task_runners::makefile::*;
+use utils::{async_read_lines, Error};
 
 use std::fmt::Debug;
-use std::path::Path;
 use std::sync::Arc;
 
 static SCROLLABLE_ID: Lazy<scrollable::Id> = Lazy::new(scrollable::Id::unique);
 
 pub fn main() -> iced::Result {
+    sensible_env_logger::init!();
+    debug!("start ck");
     iced::application("Editor - Iced", Editor::update, Editor::view)
         .subscription(Editor::subscription)
         .theme(Editor::theme)
@@ -46,7 +51,7 @@ pub enum Message {
     Reload,
     TaskMake(String),
     TaskStart(usize),
-    TaskUpdate((usize, Result<stdout::Stdout, stdout::Error>)),
+    TaskUpdate((usize, Result<worker::Stdout, worker::Error>)),
     TaskStop,
     ThemeSelected(Theme),
 
@@ -87,8 +92,9 @@ impl Editor {
             Message::TaskMake(target) => {
                 let id = self.next_id;
                 self.next_id += 1;
-                for ele in self.tasks.iter_mut() {
-                    ele.stop();
+                for task in self.tasks.iter_mut() {
+                    task.stop();
+                    debug!("task ({:?}) stopped", task.target());
                 }
                 self.tasks.push(StdOutput::new(id, target));
 
@@ -97,6 +103,7 @@ impl Editor {
             Message::TaskStart(id) => {
                 if let Some(task) = self.tasks.get_mut(id) {
                     task.start();
+                    debug!("task ({:?}) started", task.target());
                 }
 
                 Task::none()
@@ -116,11 +123,12 @@ impl Editor {
             Message::ParseMakeTargets(result) => {
                 if let Ok(contents) = result {
                     for line in contents.lines() {
-                        let target = makefile::Targets(line);
+                        let target = parser::grammar::Targets(line);
                         if let Ok(t) = target {
                             self.targets.extend(t);
                         }
                     }
+                    debug!("Found targets: {:?}", self.targets);
                 }
                 Task::none()
             }
@@ -252,24 +260,6 @@ impl Editor {
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum Error {
-    DialogClosed,
-    IoError(io::ErrorKind),
-}
-
-async fn async_read_lines<P>(filename: P) -> Result<Arc<String>, Error>
-where
-    P: AsRef<Path>,
-{
-    let contents = fs::read_to_string(filename)
-        .await
-        .map(Arc::new)
-        .map_err(|error| Error::IoError(error.kind()))?;
-
-    Ok(contents)
-}
-
 fn target_card<'a, Message: Clone + 'a>(
     action: Element<'a, Message>,
     label: &'a str,
@@ -349,6 +339,9 @@ impl StdOutput {
             output: String::new(),
         }
     }
+    pub fn target(&self) -> String {
+        self.target.clone()
+    }
 
     pub fn start(&mut self) {
         match self.state {
@@ -364,22 +357,22 @@ impl StdOutput {
     pub fn stop(&mut self) {
         self.state = State::Finished;
     }
-    pub fn stream_update(&mut self, output_update: Result<stdout::Stdout, stdout::Error>) {
+    pub fn stream_update(&mut self, output_update: Result<worker::Stdout, worker::Error>) {
         if let State::Streaming { stream } = &mut self.state {
             match output_update {
-                Ok(stdout::Stdout::OutputUpdate { output }) => {
+                Ok(worker::Stdout::OutputUpdate { output }) => {
                     self.output.push_str(output.as_str());
                     self.output.push('\n');
                     *stream = output
                 }
-                Ok(stdout::Stdout::Finished) => {
+                Ok(worker::Stdout::Finished) => {
                     self.state = State::Finished;
                 }
-                Ok(stdout::Stdout::Prepare { output }) => *stream = output,
-                Err(stdout::Error::NoContent) => {
+                Ok(worker::Stdout::Prepare { output }) => *stream = output,
+                Err(worker::Error::NoContent) => {
                     self.state = State::Errored;
                 }
-                Err(stdout::Error::Failed(_)) => {
+                Err(worker::Error::Failed(_)) => {
                     self.state = State::Errored;
                 }
             }
@@ -389,14 +382,15 @@ impl StdOutput {
     pub fn subscription(&self) -> Subscription<Message> {
         match self.state {
             State::Streaming { .. } => {
-                stdout::subscription(self.id, self.target.clone()).map(Message::TaskUpdate)
+                debug!("{:?} subscribed", self.target.clone());
+                worker::subscription(self.id, self.target.clone()).map(Message::TaskUpdate)
             }
             _ => Subscription::none(),
         }
     }
 
     pub fn view(&self) -> Element<Message> {
-        let output = match &self.state {
+        let _ = match &self.state {
             State::Idle { .. } => String::from("Press start..."),
 
             State::Streaming { stream } => (*stream).clone(),
