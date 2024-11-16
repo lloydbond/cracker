@@ -411,15 +411,10 @@ impl StdOutput {
 
 #[cfg(test)]
 mod tests {
-    use std::{io::ErrorKind};
+    use std::io::ErrorKind;
 
     use super::*;
     use tokio;
-
-    #[tokio::test]
-    async fn my_test() {
-        assert!(true);
-    }
 
     #[tokio::test]
     async fn test_file_not_found() {
