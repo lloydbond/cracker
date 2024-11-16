@@ -1,7 +1,6 @@
 mod task_runners;
 mod utils;
 
-use task_runners::makefile::*;
 use iced::alignment::Horizontal::Left;
 use iced::widget::{self, button, column, container, row, scrollable, text, tooltip};
 use iced::widget::{horizontal_space, pick_list, Column};
@@ -9,8 +8,8 @@ use iced::Alignment::Center;
 use iced::Length::Fill;
 use iced::{Element, Font, Subscription, Task, Theme};
 use once_cell::sync::Lazy;
+use task_runners::makefile::*;
 use utils::{async_read_lines, Error};
-
 
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -304,10 +303,6 @@ fn icon<'a, Message>(codepoint: char) -> Element<'a, Message> {
 
     text(codepoint).font(ICON_FONT).into()
 }
-
-
-
-
 
 // StdOutput
 #[derive(Debug)]

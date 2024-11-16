@@ -1,12 +1,11 @@
-use tokio::{fs, io};
 use std::path::Path;
 use std::sync::Arc;
+use tokio::{fs, io};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Error {
     IoError(io::ErrorKind),
 }
-
 
 pub async fn async_read_lines<P>(filename: P) -> Result<Arc<String>, Error>
 where
@@ -36,7 +35,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_empty_file() {
-        let result: Result<Arc<String>, Error> = async_read_lines("tests/test_files/empty.txt").await;
+        let result: Result<Arc<String>, Error> =
+            async_read_lines("tests/test_files/empty.txt").await;
         assert!(result.is_ok());
 
         let content: Arc<String> = result.unwrap();
@@ -45,7 +45,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_single_line_file() {
-        let result: Result<Arc<String>, Error> = async_read_lines("tests/test_files/single_line.txt").await;
+        let result: Result<Arc<String>, Error> =
+            async_read_lines("tests/test_files/single_line.txt").await;
         assert!(result.is_ok());
         let actual: Arc<String> = result.unwrap();
         let expected: Arc<String> = Arc::new("Hello World".to_string());
@@ -54,7 +55,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_multiple_lines_file() {
-        let result: Result<Arc<String>, Error> = async_read_lines("tests/test_files/multiple_lines.txt").await;
+        let result: Result<Arc<String>, Error> =
+            async_read_lines("tests/test_files/multiple_lines.txt").await;
         assert!(result.is_ok());
         let actual: Arc<String> = result.unwrap();
         let expected: Arc<String> = Arc::new("Line 1\nLine 2\nLine 3".to_string());
@@ -63,7 +65,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_file_with_empty_lines() {
-        let result: Result<Arc<String>, Error> = async_read_lines("tests/test_files/empty_lines.txt").await;
+        let result: Result<Arc<String>, Error> =
+            async_read_lines("tests/test_files/empty_lines.txt").await;
         assert!(result.is_ok());
         let actual: Arc<String> = result.unwrap();
         let expected: Arc<String> = Arc::new("First\n\n\nLast".to_string());
