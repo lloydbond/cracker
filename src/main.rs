@@ -1,8 +1,7 @@
-mod stdout;
+mod task_runners;
 mod utils;
-use cracker::*;
 
-
+use task_runners::makefile::*;
 use iced::alignment::Horizontal::Left;
 use iced::widget::{self, button, column, container, row, scrollable, text, tooltip};
 use iced::widget::{horizontal_space, pick_list, Column};
@@ -48,7 +47,7 @@ pub enum Message {
     Reload,
     TaskMake(String),
     TaskStart(usize),
-    TaskUpdate((usize, Result<stdout::Stdout, stdout::Error>)),
+    TaskUpdate((usize, Result<worker::Stdout, worker::Error>)),
     TaskStop,
     ThemeSelected(Theme),
 
@@ -118,7 +117,7 @@ impl Editor {
             Message::ParseMakeTargets(result) => {
                 if let Ok(contents) = result {
                     for line in contents.lines() {
-                        let target = makefile::Targets(line);
+                        let target = parser::grammar::Targets(line);
                         if let Ok(t) = target {
                             self.targets.extend(t);
                         }
@@ -306,6 +305,10 @@ fn icon<'a, Message>(codepoint: char) -> Element<'a, Message> {
     text(codepoint).font(ICON_FONT).into()
 }
 
+
+
+
+
 // StdOutput
 #[derive(Debug)]
 struct StdOutput {
@@ -348,22 +351,22 @@ impl StdOutput {
     pub fn stop(&mut self) {
         self.state = State::Finished;
     }
-    pub fn stream_update(&mut self, output_update: Result<stdout::Stdout, stdout::Error>) {
+    pub fn stream_update(&mut self, output_update: Result<worker::Stdout, worker::Error>) {
         if let State::Streaming { stream } = &mut self.state {
             match output_update {
-                Ok(stdout::Stdout::OutputUpdate { output }) => {
+                Ok(worker::Stdout::OutputUpdate { output }) => {
                     self.output.push_str(output.as_str());
                     self.output.push('\n');
                     *stream = output
                 }
-                Ok(stdout::Stdout::Finished) => {
+                Ok(worker::Stdout::Finished) => {
                     self.state = State::Finished;
                 }
-                Ok(stdout::Stdout::Prepare { output }) => *stream = output,
-                Err(stdout::Error::NoContent) => {
+                Ok(worker::Stdout::Prepare { output }) => *stream = output,
+                Err(worker::Error::NoContent) => {
                     self.state = State::Errored;
                 }
-                Err(stdout::Error::Failed(_)) => {
+                Err(worker::Error::Failed(_)) => {
                     self.state = State::Errored;
                 }
             }
@@ -373,7 +376,7 @@ impl StdOutput {
     pub fn subscription(&self) -> Subscription<Message> {
         match self.state {
             State::Streaming { .. } => {
-                stdout::subscription(self.id, self.target.clone()).map(Message::TaskUpdate)
+                worker::subscription(self.id, self.target.clone()).map(Message::TaskUpdate)
             }
             _ => Subscription::none(),
         }
