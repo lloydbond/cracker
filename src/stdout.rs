@@ -1,4 +1,3 @@
-use iced::futures::channel::mpsc;
 use iced::futures::{SinkExt, Stream, StreamExt};
 use iced::stream::try_channel;
 use iced::Subscription;
@@ -49,11 +48,6 @@ pub fn subscription<I: 'static + Hash + Copy + Send + Sync>(
 
 pub fn some_worker(target: String) -> impl Stream<Item = Result<Stdout, Error>> {
     try_channel(1, |mut output| async move {
-        // Create channel
-        // let (sender, mut receiver) = mpsc::channel(1);
-
-        // Send the sender back to the application
-        // output.send(Stdout::Ready { sender }).await;
         let _ = output
             .send(Stdout::OutputUpdate {
                 output: String::from(""),
@@ -94,7 +88,6 @@ pub fn some_worker(target: String) -> impl Stream<Item = Result<Stdout, Error>> 
                 },
                 Err(_) => {
                     println!("file stream error:");
-                    // output.send(Error::Failed(Arc::new(Error::from("error"))));
                 }
             }
         }
