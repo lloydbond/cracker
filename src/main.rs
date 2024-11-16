@@ -1,17 +1,19 @@
 mod stdout;
+mod utils;
 use cracker::*;
 
+
 use iced::alignment::Horizontal::Left;
-use iced::widget::{self, button, center, column, container, row, scrollable, text, tooltip};
+use iced::widget::{self, button, column, container, row, scrollable, text, tooltip};
 use iced::widget::{horizontal_space, pick_list, Column};
 use iced::Alignment::Center;
 use iced::Length::Fill;
 use iced::{Element, Font, Subscription, Task, Theme};
 use once_cell::sync::Lazy;
-use tokio::{fs, io};
+use utils::{async_read_lines, Error};
+
 
 use std::fmt::Debug;
-use std::path::Path;
 use std::sync::Arc;
 
 static SCROLLABLE_ID: Lazy<scrollable::Id> = Lazy::new(scrollable::Id::unique);
@@ -252,23 +254,6 @@ impl Editor {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum Error {
-    IoError(io::ErrorKind),
-}
-
-async fn async_read_lines<P>(filename: P) -> Result<Arc<String>, Error>
-where
-    P: AsRef<Path>,
-{
-    let contents = fs::read_to_string(filename)
-        .await
-        .map(Arc::new)
-        .map_err(|error| Error::IoError(error.kind()))?;
-
-    Ok(contents)
-}
-
 fn target_card<'a, Message: Clone + 'a>(
     action: Element<'a, Message>,
     label: &'a str,
@@ -395,7 +380,7 @@ impl StdOutput {
     }
 
     pub fn view(&self) -> Element<Message> {
-        let output = match &self.state {
+        let _ = match &self.state {
             State::Idle { .. } => String::from("Press start..."),
 
             State::Streaming { stream } => (*stream).clone(),
@@ -406,56 +391,5 @@ impl StdOutput {
         let text_box: Column<Message> = column![text!("{}", self.output).font(Font::MONOSPACE)];
 
         text_box.into()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::io::ErrorKind;
-
-    use super::*;
-    use tokio;
-
-    #[tokio::test]
-    async fn test_file_not_found() {
-        let result: Result<Arc<String>, Error> = async_read_lines("non-existent.file").await;
-        assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), Error::IoError(ErrorKind::NotFound));
-    }
-
-    #[tokio::test]
-    async fn test_empty_file() {
-        let result: Result<Arc<String>, Error> = async_read_lines("tests/test_files/empty.txt").await;
-        assert!(result.is_ok());
-
-        let content: Arc<String> = result.unwrap();
-        assert!(content.is_empty());
-    }
-
-    #[tokio::test]
-    async fn test_single_line_file() {
-        let result: Result<Arc<String>, Error> = async_read_lines("tests/test_files/single_line.txt").await;
-        assert!(result.is_ok());
-        let actual: Arc<String> = result.unwrap();
-        let expected: Arc<String> = Arc::new("Hello World".to_string());
-        assert_eq!(actual, expected);
-    }
-
-    #[tokio::test]
-    async fn test_multiple_lines_file() {
-        let result: Result<Arc<String>, Error> = async_read_lines("tests/test_files/multiple_lines.txt").await;
-        assert!(result.is_ok());
-        let actual: Arc<String> = result.unwrap();
-        let expected: Arc<String> = Arc::new("Line 1\nLine 2\nLine 3".to_string());
-        assert_eq!(actual, expected);
-    }
-
-    #[tokio::test]
-    async fn test_file_with_empty_lines() {
-        let result: Result<Arc<String>, Error> = async_read_lines("tests/test_files/empty_lines.txt").await;
-        assert!(result.is_ok());
-        let actual: Arc<String> = result.unwrap();
-        let expected: Arc<String> = Arc::new("First\n\n\nLast".to_string());
-        assert_eq!(actual, expected);
     }
 }
