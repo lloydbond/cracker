@@ -126,7 +126,7 @@ pub mod worker {
 
     use tokio::io::{AsyncBufReadExt, BufReader};
     use tokio::process::Command;
-    use tokio::time::{Duration, Instant};
+    use tokio::time::{self, Duration, Instant};
 
     use std::hash::Hash;
     use std::process::Stdio;
@@ -189,37 +189,39 @@ pub mod worker {
                 .stdout
                 .take()
                 .expect("child did not have a handle to stdout");
-            let mut now = Instant::now();
             let mut cache: String = String::new();
             let mut reader = BufReader::new(stdout).lines();
-            let ms_50 = Duration::from_millis(50);
-            while let result = reader.next_line().await {
-                use iced::futures::StreamExt;
-                match result {
-                    Ok(line) => match line {
-                        Some(line) => {
-                            cache.push_str(&line);
-                            cache.push('\n');
+            let interval = time::interval(time::Duration::from_millis(40));
+            tokio::pin!(interval);
+            loop {
+                tokio::select! {
+                _ = interval.tick() => {
+                    if cache.is_empty() {
+                        continue;
+                    }
+                    let _ = output
+                        .send(Stdout::OutputUpdate {
+                            output: cache.clone(),
+                        })
+                        .await;
+                    cache.clear();
+
+                }
+                maybe_result =  reader.next_line() => {
+                    match maybe_result {
+
+                        Ok(Some(line)) => {
+                                    cache.push_str(&line);
+                                    cache.push('\n');
+                                }
+                                _ => break,
                             // debug!("{:?}", &line);
-                            if now.elapsed() >= ms_50 {
-                                let _ = output
-                                    .send(Stdout::OutputUpdate {
-                                        output: cache.clone(),
-                                    })
-                                    .await;
-                                cache.clear();
-                                now = Instant::now();
-                            }
-                        }
-                        None => {
-                            break;
-                        }
-                    },
-                    Err(_) => {
-                        println!("file stream error:");
+
                     }
                 }
+                }
             }
+
             if !cache.is_empty() {
                 let _ = output
                     .send(Stdout::OutputUpdate {

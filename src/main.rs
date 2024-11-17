@@ -362,7 +362,7 @@ impl StdOutput {
             match output_update {
                 Ok(worker::Stdout::OutputUpdate { output }) => {
                     self.output.push_str(output.as_str());
-                    self.output.push('\n');
+                    // self.output.push('\n');
                     *stream = output
                 }
                 Ok(worker::Stdout::Finished) => {
