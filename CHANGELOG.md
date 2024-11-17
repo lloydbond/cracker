@@ -1,10 +1,10 @@
-[v0.6.0] 2024-11-04
+[v0.6.0] 2024-11-16
 -------------------
 
 -   added helpful debug messages
 -   reorganize makefile logic to task runner modules
 
-[v0.5.0] 2024-11-04
+[v0.5.0] 2024-11-15
 -------------------
 
 -   long running stdio output now supported (tail -f file.log)

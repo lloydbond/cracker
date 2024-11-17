@@ -126,6 +126,7 @@ pub mod worker {
 
     use tokio::io::{AsyncBufReadExt, BufReader};
     use tokio::process::Command;
+    use tokio::time::{Duration, Instant};
 
     use std::hash::Hash;
     use std::process::Stdio;
@@ -188,13 +189,27 @@ pub mod worker {
                 .stdout
                 .take()
                 .expect("child did not have a handle to stdout");
+            let mut now = Instant::now();
+            let mut cache: String = String::new();
             let mut reader = BufReader::new(stdout).lines();
+            let ms_50 = Duration::from_millis(50);
             while let result = reader.next_line().await {
                 use iced::futures::StreamExt;
                 match result {
                     Ok(line) => match line {
-                        Some(l) => {
-                            let _ = output.send(Stdout::OutputUpdate { output: l }).await;
+                        Some(line) => {
+                            cache.push_str(&line);
+                            cache.push('\n');
+                            // debug!("{:?}", &line);
+                            if now.elapsed() >= ms_50 {
+                                let _ = output
+                                    .send(Stdout::OutputUpdate {
+                                        output: cache.clone(),
+                                    })
+                                    .await;
+                                cache.clear();
+                                now = Instant::now();
+                            }
                         }
                         None => {
                             break;
@@ -204,6 +219,14 @@ pub mod worker {
                         println!("file stream error:");
                     }
                 }
+            }
+            if !cache.is_empty() {
+                let _ = output
+                    .send(Stdout::OutputUpdate {
+                        output: cache.clone(),
+                    })
+                    .await;
+                cache.clear();
             }
             let _ = output.send(Stdout::Finished).await;
 
