@@ -1,3 +1,4 @@
+extern crate pretty_env_logger;
 #[macro_use]
 extern crate log;
 
@@ -5,8 +6,10 @@ mod task_runners;
 mod utils;
 
 use iced::alignment::Horizontal::Left;
-use iced::widget::{self, button, column, container, row, scrollable, text, tooltip};
-use iced::widget::{horizontal_space, pick_list, Column};
+use iced::widget::{
+    self, button, column, container, horizontal_space, pick_list, row, scrollable, text, tooltip,
+    Column,
+};
 use iced::Alignment::Center;
 use iced::Length::Fill;
 use iced::{Element, Font, Subscription, Task, Theme};
@@ -14,14 +17,13 @@ use once_cell::sync::Lazy;
 use task_runners::makefile::*;
 use utils::{async_read_lines, Error};
 
-use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::sync::Arc;
 
 static SCROLLABLE_ID: Lazy<scrollable::Id> = Lazy::new(scrollable::Id::unique);
 
 pub fn main() -> iced::Result {
-    sensible_env_logger::init!();
+    pretty_env_logger::init();
     debug!("start ck");
     iced::application("Editor - Iced", Editor::update, Editor::view)
         .subscription(Editor::subscription)
@@ -353,8 +355,7 @@ struct StdOutput {
     id: usize,
     target: String,
     state: State,
-    output: String,
-    output_buffer: VecDeque<String>,
+    textbox_output: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -371,8 +372,7 @@ impl StdOutput {
             id,
             target,
             state: State::Idle,
-            output: String::new(),
-            output_buffer: VecDeque::with_capacity(10_000),
+            textbox_output: Vec::new(),
         }
     }
     pub fn target(&self) -> String {
@@ -392,37 +392,20 @@ impl StdOutput {
 
     pub fn stop(&mut self) {
         self.state = State::Finished;
-        self.output_buffer.clear();
+        self.textbox_output.clear();
     }
     pub fn stream_update(&mut self, output_update: Result<worker::Stdout, worker::Error>) {
-        fn update_buffer(output_buffer: &mut VecDeque<String>, o: &String) {
-            output_buffer.push_back(o.clone());
-            let len = output_buffer.len();
-            if len > 10_000 {
-                output_buffer.pop_front();
-            }
-        }
-        fn generate_output(output_buffer: &VecDeque<String>) -> String {
-            let mut output: String = String::new();
-            output_buffer.iter().for_each(|line| {
-                output.push_str(line);
-                output.push('\n');
-            });
-            output
-        }
         if let State::Streaming { stream } = &mut self.state {
             match output_update {
                 Ok(worker::Stdout::OutputUpdate { output }) => {
-                    update_buffer(&mut self.output_buffer, &output);
-                    self.output = generate_output(&self.output_buffer);
+                    self.textbox_output.push(output.clone());
                     *stream = output
                 }
                 Ok(worker::Stdout::Finished) => {
                     self.state = State::Finished;
                 }
                 Ok(worker::Stdout::Prepare { output }) => {
-                    update_buffer(&mut self.output_buffer, &output);
-                    self.output = generate_output(&self.output_buffer);
+                    self.textbox_output.push(output.clone());
                     *stream = output
                 }
 
@@ -446,18 +429,13 @@ impl StdOutput {
     }
 
     pub fn view(&self) -> Element<Message> {
-        // let _ = match &self.state {
-        //     State::Idle { .. } => String::from("Press start..."),
-
-        //     State::Streaming { stream } => (*stream).clone(),
-        //     State::Finished { .. } => String::from("Finished..."),
-        //     State::Errored { .. } => String::from("Errored..."),
-        // };
-
-        debug!("output_buffer len: {:?}", self.output_buffer.len());
-        let text_box: Column<Message> =
-            column![text!("{}", self.output.clone()).font(Font::MONOSPACE)];
-
-        text_box.into()
+        debug!("output_buffer len: {:?}", self.textbox_output.len());
+        Column::with_children(
+            self.textbox_output
+                .iter()
+                .map(|o| text!("{}", o).font(Font::MONOSPACE))
+                .map(Element::from),
+        )
+        .into()
     }
 }

@@ -168,7 +168,7 @@ pub mod worker {
                     output: "".to_string(),
                 })
                 .await;
-
+            debug!("initialize worker: {target}");
             let mut cmd = Command::new("make");
 
             // Specify that we want the command's standard output piped back to us.
@@ -177,7 +177,6 @@ pub mod worker {
             // come from the keyboard and standard output/error will go directly to
             // the terminal if this process is invoked from the command line).
             cmd.stdout(Stdio::piped());
-            cmd.stdin(Stdio::piped());
             cmd.stderr(Stdio::piped());
 
             let mut child = cmd
@@ -199,16 +198,17 @@ pub mod worker {
                             let _ = output.send(Stdout::OutputUpdate { output: l }).await;
                         }
                         None => {
+                            debug!("data stream ended");
                             break;
                         }
                     },
                     Err(_) => {
-                        println!("file stream error:");
+                        error!("file stream error:");
                     }
                 }
             }
             let _ = output.send(Stdout::Finished).await;
-
+            debug!("leaving worker");
             Ok(())
         })
     }
