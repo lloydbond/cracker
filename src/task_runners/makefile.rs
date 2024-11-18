@@ -126,7 +126,6 @@ pub mod worker {
 
     use tokio::io::{AsyncBufReadExt, BufReader};
     use tokio::process::Command;
-    use tokio::time::{self};
 
     use std::hash::Hash;
     use std::process::Stdio;
@@ -177,6 +176,7 @@ pub mod worker {
             // come from the keyboard and standard output/error will go directly to
             // the terminal if this process is invoked from the command line).
             cmd.stdout(Stdio::piped());
+            cmd.stdin(Stdio::piped());
             cmd.stderr(Stdio::piped());
 
             let mut child = cmd

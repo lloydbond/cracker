@@ -128,11 +128,13 @@ impl Editor {
                 Task::none()
             }
             Message::TaskUpdate((id, output)) => {
-                if let Some(task) = self.tasks.get_mut(id) {
-                    task.stream_update(output);
-                }
-                if self.auto_scroll {
-                    return Task::done(Message::ScrollToEnd);
+                if let Some(task_id) = self.tasks.iter().position(|t| t.id == id) {
+                    if let Some(task) = self.tasks.get_mut(task_id) {
+                        task.stream_update(output);
+                    }
+                    if self.auto_scroll {
+                        return Task::done(Message::ScrollToEnd);
+                    }
                 }
                 Task::none()
             }
