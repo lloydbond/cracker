@@ -2,7 +2,7 @@
 -------------------
 
 -   streaming a stdout should be smoother now.
--   
+-   Autoscroll added
 
 [v0.6.0] 2024-11-16
 -------------------

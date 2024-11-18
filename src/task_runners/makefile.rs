@@ -126,7 +126,7 @@ pub mod worker {
 
     use tokio::io::{AsyncBufReadExt, BufReader};
     use tokio::process::Command;
-    use tokio::time::{self, Duration, Instant};
+    use tokio::time::{self};
 
     use std::hash::Hash;
     use std::process::Stdio;
@@ -134,8 +134,8 @@ pub mod worker {
 
     #[derive(Debug, Clone, PartialEq)]
     pub enum Stdout {
-        Prepare { output: String },
-        OutputUpdate { output: String },
+        Prepare { output: Vec<String> },
+        OutputUpdate { output: Vec<String> },
         Finished,
     }
 
@@ -165,7 +165,7 @@ pub mod worker {
         try_channel(1, |mut output| async move {
             let _ = output
                 .send(Stdout::OutputUpdate {
-                    output: String::from(""),
+                    output: ["".to_string()].into(),
                 })
                 .await;
 
@@ -189,9 +189,9 @@ pub mod worker {
                 .stdout
                 .take()
                 .expect("child did not have a handle to stdout");
-            let mut cache: String = String::new();
+            let mut cache: Vec<String> = Vec::new();
             let mut reader = BufReader::new(stdout).lines();
-            let interval = time::interval(time::Duration::from_millis(40));
+            let interval = time::interval(time::Duration::from_millis(10));
             tokio::pin!(interval);
             loop {
                 tokio::select! {
@@ -211,11 +211,9 @@ pub mod worker {
                     match maybe_result {
 
                         Ok(Some(line)) => {
-                                    cache.push_str(&line);
-                                    cache.push('\n');
+                                    cache.push(line);
                                 }
                                 _ => break,
-                            // debug!("{:?}", &line);
 
                     }
                 }

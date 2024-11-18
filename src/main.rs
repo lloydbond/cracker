@@ -5,7 +5,7 @@ mod task_runners;
 mod utils;
 
 use iced::alignment::Horizontal::Left;
-use iced::widget::{self, button, column, container, row, scrollable, text, tooltip};
+use iced::widget::{self, button, column, container, row, scrollable, text, tooltip, Scrollable};
 use iced::widget::{horizontal_space, pick_list, Column};
 use iced::Alignment::Center;
 use iced::Length::Fill;
@@ -14,6 +14,7 @@ use once_cell::sync::Lazy;
 use task_runners::makefile::*;
 use utils::{async_read_lines, Error};
 
+use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::sync::Arc;
 
@@ -37,6 +38,7 @@ struct Editor {
     tasks: Vec<StdOutput>,
     next_id: usize,
 
+    auto_scroll: bool,
     scrollbar_width: u16,
     scrollbar_margin: u16,
     scroller_width: u16,
@@ -52,11 +54,12 @@ pub enum Message {
     TaskMake(String),
     TaskStart(usize),
     TaskUpdate((usize, Result<worker::Stdout, worker::Error>)),
-    TaskStop,
+    TaskStop(usize),
     ThemeSelected(Theme),
 
     ScrollToBeginning,
     ScrollToEnd,
+    ScorllAutoToggle,
     Scrolled(scrollable::Viewport),
 }
 
@@ -69,6 +72,7 @@ impl Editor {
                 tasks: Vec::new(),
                 next_id: 0,
 
+                auto_scroll: true,
                 scrollbar_width: 15,
                 scrollbar_margin: 0,
                 scroller_width: 10,
@@ -108,13 +112,27 @@ impl Editor {
 
                 Task::none()
             }
+            Message::TaskStop(id) => {
+                if let Some(task) = self.tasks.get_mut(id) {
+                    task.stop();
+                }
+                Task::none()
+            }
             Message::TaskUpdate((id, output)) => {
                 if let Some(task) = self.tasks.get_mut(id) {
                     task.stream_update(output);
                 }
+                if self.auto_scroll {
+                    return Task::done(Message::ScrollToEnd);
+                }
                 Task::none()
             }
-            Message::TaskStop => Task::none(),
+            Message::ScorllAutoToggle => {
+                debug!("auto scroll? {:#}", self.auto_scroll);
+                self.auto_scroll = !self.auto_scroll;
+                debug!("auto scroll? {:#}", self.auto_scroll);
+                Task::none()
+            }
             Message::Reload => Task::done(Message::LoadMakeTargetsPEG),
             Message::LoadMakeTargetsPEG => {
                 self.targets.clear();
@@ -169,7 +187,13 @@ impl Editor {
         .align_y(Center);
         let scroll_to_end_button =
             || action(down_icon(), "Scroll to end", Some(Message::ScrollToEnd));
-
+        let scroll_auto_on_off_button = || {
+            action(
+                fast_forward_icon(),
+                "auto scroll",
+                Some(Message::ScorllAutoToggle),
+            )
+        };
         let scroll_to_beginning_button = || {
             action(
                 up_icon(),
@@ -181,6 +205,7 @@ impl Editor {
         let controls_output = row![
             horizontal_space(),
             scroll_to_end_button(),
+            scroll_auto_on_off_button(),
             scroll_to_beginning_button(),
         ]
         .spacing(10)
@@ -188,7 +213,7 @@ impl Editor {
 
         let status = row![].spacing(10);
         let mut targets = Vec::new();
-        for target in self.targets.iter() {
+        for (id, target) in self.targets.iter().enumerate() {
             targets.push(target_card(
                 action(
                     start_icon(),
@@ -196,6 +221,7 @@ impl Editor {
                     Some(Message::TaskMake(target.clone())),
                 ),
                 target,
+                action(stop_icon(), "stop", Some(Message::TaskStop(id))),
             ));
         }
         let text_box: Column<Message> =
@@ -263,8 +289,9 @@ impl Editor {
 fn target_card<'a, Message: Clone + 'a>(
     action: Element<'a, Message>,
     label: &'a str,
+    other_action: Element<'a, Message>,
 ) -> Element<'a, Message> {
-    container(row![action, label].spacing(1))
+    container(row![action, other_action, label].spacing(1))
         .style(container::bordered_box)
         .padding(1)
         .into()
@@ -295,15 +322,23 @@ fn reload_icon<'a, Message>() -> Element<'a, Message> {
 }
 
 fn start_icon<'a, Message>() -> Element<'a, Message> {
-    icon('\u{0e802}')
+    icon('\u{0e801}')
 }
 
 fn up_icon<'a, Message>() -> Element<'a, Message> {
-    icon('\u{0e803}')
+    icon('\u{0e802}')
 }
 
 fn down_icon<'a, Message>() -> Element<'a, Message> {
-    icon('\u{0e801}')
+    icon('\u{0e803}')
+}
+
+fn fast_forward_icon<'a, Message>() -> Element<'a, Message> {
+    icon('\u{0f103}')
+}
+
+fn stop_icon<'a, Message>() -> Element<'a, Message> {
+    icon('\u{0e804}')
 }
 
 fn icon<'a, Message>(codepoint: char) -> Element<'a, Message> {
@@ -319,7 +354,7 @@ struct StdOutput {
     target: String,
     state: State,
     output: String,
-    // sender: mpsc::Sender<Input>,
+    output_buffer: VecDeque<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -337,6 +372,7 @@ impl StdOutput {
             target,
             state: State::Idle,
             output: String::new(),
+            output_buffer: VecDeque::with_capacity(10_000),
         }
     }
     pub fn target(&self) -> String {
@@ -356,25 +392,33 @@ impl StdOutput {
 
     pub fn stop(&mut self) {
         self.state = State::Finished;
+        self.output_buffer.clear();
     }
     pub fn stream_update(&mut self, output_update: Result<worker::Stdout, worker::Error>) {
-        if let State::Streaming { stream } = &mut self.state {
-            match output_update {
-                Ok(worker::Stdout::OutputUpdate { output }) => {
-                    self.output.push_str(output.as_str());
-                    // self.output.push('\n');
-                    *stream = output
+        match output_update {
+            Ok(worker::Stdout::OutputUpdate { output }) => {
+                self.output_buffer.extend(output);
+                let len = self.output_buffer.len();
+                if len > 10_000 {
+                    self.output_buffer.drain(..(len - 10_000));
                 }
-                Ok(worker::Stdout::Finished) => {
-                    self.state = State::Finished;
-                }
-                Ok(worker::Stdout::Prepare { output }) => *stream = output,
-                Err(worker::Error::NoContent) => {
-                    self.state = State::Errored;
-                }
-                Err(worker::Error::Failed(_)) => {
-                    self.state = State::Errored;
-                }
+                let mut output: String = String::new();
+                self.output_buffer.iter().for_each(|line| {
+                    output.push_str(line);
+                    output.push('\n');
+                });
+                self.output = output.clone();
+                // *stream = output
+            }
+            Ok(worker::Stdout::Finished) => {
+                self.state = State::Finished;
+            }
+            Ok(worker::Stdout::Prepare { output }) => self.output_buffer.extend(output),
+            Err(worker::Error::NoContent) => {
+                self.state = State::Errored;
+            }
+            Err(worker::Error::Failed(_)) => {
+                self.state = State::Errored;
             }
         }
     }
@@ -390,15 +434,17 @@ impl StdOutput {
     }
 
     pub fn view(&self) -> Element<Message> {
-        let _ = match &self.state {
-            State::Idle { .. } => String::from("Press start..."),
+        // let _ = match &self.state {
+        //     State::Idle { .. } => String::from("Press start..."),
 
-            State::Streaming { stream } => (*stream).clone(),
-            State::Finished { .. } => String::from("Finished..."),
-            State::Errored { .. } => String::from("Errored..."),
-        };
+        //     State::Streaming { stream } => (*stream).clone(),
+        //     State::Finished { .. } => String::from("Finished..."),
+        //     State::Errored { .. } => String::from("Errored..."),
+        // };
 
-        let text_box: Column<Message> = column![text!("{}", self.output).font(Font::MONOSPACE)];
+        debug!("output_buffer len: {:?}", self.output_buffer.len());
+        let text_box: Column<Message> =
+            column![text!("{}", self.output.clone()).font(Font::MONOSPACE)];
 
         text_box.into()
     }

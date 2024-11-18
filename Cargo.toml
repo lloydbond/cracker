@@ -25,3 +25,7 @@ tokio = {version = "1", features = ["fs","macros", "process", "io-util"]}
 log = "0.4.22"
 sensible-env-logger = "0.3.2"
 tokio = {version = "1", features = [ "macros"]}
+
+[profile.release]
+debug = true
+
