@@ -440,8 +440,15 @@ impl StdOutput {
 
     pub fn view(&self) -> Element<Message> {
         debug!("output_buffer len: {:?}", self.textbox_output.len());
+        fn get_window(len: usize, width: usize) -> usize {
+            if len > width {
+                return len - width;
+            }
+            0
+        }
+        let idx = get_window(self.textbox_output.len(), 100);
         Column::with_children(
-            self.textbox_output
+            self.textbox_output[idx..]
                 .iter()
                 .map(|o| text!("{}", o).font(Font::MONOSPACE))
                 .map(Element::from),
