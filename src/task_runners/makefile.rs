@@ -134,8 +134,8 @@ pub mod worker {
 
     #[derive(Debug, Clone, PartialEq)]
     pub enum Stdout {
-        Prepare { output: Vec<String> },
-        OutputUpdate { output: Vec<String> },
+        Prepare { output: String },
+        OutputUpdate { output: String },
         Finished,
     }
 
@@ -165,7 +165,7 @@ pub mod worker {
         try_channel(1, |mut output| async move {
             let _ = output
                 .send(Stdout::OutputUpdate {
-                    output: ["".to_string()].into(),
+                    output: "".to_string(),
                 })
                 .await;
 
@@ -189,44 +189,23 @@ pub mod worker {
                 .stdout
                 .take()
                 .expect("child did not have a handle to stdout");
-            let mut cache: Vec<String> = Vec::new();
             let mut reader = BufReader::new(stdout).lines();
-            let interval = time::interval(time::Duration::from_millis(10));
-            tokio::pin!(interval);
-            loop {
-                tokio::select! {
-                _ = interval.tick() => {
-                    if cache.is_empty() {
-                        continue;
-                    }
-                    let _ = output
-                        .send(Stdout::OutputUpdate {
-                            output: cache.clone(),
-                        })
-                        .await;
-                    cache.clear();
 
-                }
-                maybe_result =  reader.next_line() => {
-                    match maybe_result {
-
-                        Ok(Some(line)) => {
-                                    cache.push(line);
-                                }
-                                _ => break,
-
+            while let result = reader.next_line().await {
+                use iced::futures::StreamExt;
+                match result {
+                    Ok(line) => match line {
+                        Some(l) => {
+                            let _ = output.send(Stdout::OutputUpdate { output: l }).await;
+                        }
+                        None => {
+                            break;
+                        }
+                    },
+                    Err(_) => {
+                        println!("file stream error:");
                     }
                 }
-                }
-            }
-
-            if !cache.is_empty() {
-                let _ = output
-                    .send(Stdout::OutputUpdate {
-                        output: cache.clone(),
-                    })
-                    .await;
-                cache.clear();
             }
             let _ = output.send(Stdout::Finished).await;
 

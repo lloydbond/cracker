@@ -5,7 +5,7 @@ mod task_runners;
 mod utils;
 
 use iced::alignment::Horizontal::Left;
-use iced::widget::{self, button, column, container, row, scrollable, text, tooltip, Scrollable};
+use iced::widget::{self, button, column, container, row, scrollable, text, tooltip};
 use iced::widget::{horizontal_space, pick_list, Column};
 use iced::Alignment::Center;
 use iced::Length::Fill;
@@ -395,34 +395,46 @@ impl StdOutput {
         self.output_buffer.clear();
     }
     pub fn stream_update(&mut self, output_update: Result<worker::Stdout, worker::Error>) {
-        match output_update {
-            Ok(worker::Stdout::OutputUpdate { output }) => {
-                self.output_buffer.extend(output);
-                let len = self.output_buffer.len();
-                if len > 10_000 {
-                    self.output_buffer.drain(..(len - 10_000));
+        fn update_buffer(output_buffer: &mut VecDeque<String>, o: &String) {
+            output_buffer.push_back(o.clone());
+            let len = output_buffer.len();
+            if len > 10_000 {
+                output_buffer.pop_front();
+            }
+        }
+        fn generate_output(output_buffer: &VecDeque<String>) -> String {
+            let mut output: String = String::new();
+            output_buffer.iter().for_each(|line| {
+                output.push_str(line);
+                output.push('\n');
+            });
+            output
+        }
+        if let State::Streaming { stream } = &mut self.state {
+            match output_update {
+                Ok(worker::Stdout::OutputUpdate { output }) => {
+                    update_buffer(&mut self.output_buffer, &output);
+                    self.output = generate_output(&self.output_buffer);
+                    *stream = output
                 }
-                let mut output: String = String::new();
-                self.output_buffer.iter().for_each(|line| {
-                    output.push_str(line);
-                    output.push('\n');
-                });
-                self.output = output.clone();
-                // *stream = output
-            }
-            Ok(worker::Stdout::Finished) => {
-                self.state = State::Finished;
-            }
-            Ok(worker::Stdout::Prepare { output }) => self.output_buffer.extend(output),
-            Err(worker::Error::NoContent) => {
-                self.state = State::Errored;
-            }
-            Err(worker::Error::Failed(_)) => {
-                self.state = State::Errored;
+                Ok(worker::Stdout::Finished) => {
+                    self.state = State::Finished;
+                }
+                Ok(worker::Stdout::Prepare { output }) => {
+                    update_buffer(&mut self.output_buffer, &output);
+                    self.output = generate_output(&self.output_buffer);
+                    *stream = output
+                }
+
+                Err(worker::Error::NoContent) => {
+                    self.state = State::Errored;
+                }
+                Err(worker::Error::Failed(_)) => {
+                    self.state = State::Errored;
+                }
             }
         }
     }
-
     pub fn subscription(&self) -> Subscription<Message> {
         match self.state {
             State::Streaming { .. } => {
