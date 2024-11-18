@@ -38,7 +38,6 @@ struct Editor {
     theme: Theme,
     targets: Vec<String>,
     tasks: Vec<StdOutput>,
-    next_id: usize,
 
     auto_scroll: bool,
     scrollbar_width: u16,
@@ -53,8 +52,8 @@ pub enum Message {
     LoadMakeTargetsPEG,
     ParseMakeTargets(std::result::Result<Arc<String>, Error>),
     Reload,
-    TaskMake(String),
-    TaskStart(usize),
+    TaskMake(usize, String),
+    TaskStart(usize, String),
     TaskUpdate((usize, Result<worker::Stdout, worker::Error>)),
     TaskStop(usize),
     ThemeSelected(Theme),
@@ -72,7 +71,6 @@ impl Editor {
                 theme: Theme::CatppuccinMocha,
                 targets: Vec::new(),
                 tasks: Vec::new(),
-                next_id: 0,
 
                 auto_scroll: true,
                 scrollbar_width: 15,
@@ -95,29 +93,38 @@ impl Editor {
 
                 Task::none()
             }
-            Message::TaskMake(target) => {
-                let id = self.next_id;
-                self.next_id += 1;
+            Message::TaskMake(id, target) => {
                 for task in self.tasks.iter_mut() {
                     task.stop();
                     debug!("task ({:?}) stopped", task.target());
                 }
-                self.tasks.push(StdOutput::new(id, target));
-
-                Task::done(Message::TaskStart(id))
-            }
-            Message::TaskStart(id) => {
-                if let Some(task) = self.tasks.get_mut(id) {
-                    task.start();
-                    debug!("task ({:?}) started", task.target());
-                }
+                let mut task = StdOutput::new(id, target);
+                task.start();
+                self.tasks.push(task);
 
                 Task::none()
             }
-            Message::TaskStop(id) => {
-                if let Some(task) = self.tasks.get_mut(id) {
-                    task.stop();
+            Message::TaskStart(id, target) => {
+                let mut msg_next = Task::none();
+                if let Some(task_id) = self.tasks.iter().position(|t| t.id == id) {
+                    self.tasks[task_id].start();
+                    debug!("task ({:?}) started", self.tasks[task_id].target());
+                } else {
+                    msg_next = Task::done(Message::TaskMake(id, target));
                 }
+
+                msg_next
+            }
+            Message::TaskStop(id) => {
+                debug!("stop id: {id:?}");
+
+                if let Some(task_id) = self.tasks.iter().position(|t| t.id == id) {
+                    if let Some(task) = self.tasks.get_mut(task_id) {
+                        debug!("task {task:?}");
+                        task.stop();
+                    }
+                }
+                debug!("task stop??");
                 Task::none()
             }
             Message::TaskUpdate((id, output)) => {
@@ -220,7 +227,7 @@ impl Editor {
                 action(
                     start_icon(),
                     target,
-                    Some(Message::TaskMake(target.clone())),
+                    Some(Message::TaskStart(id, target.clone())),
                 ),
                 target,
                 action(stop_icon(), "stop", Some(Message::TaskStop(id))),
@@ -350,7 +357,7 @@ fn icon<'a, Message>(codepoint: char) -> Element<'a, Message> {
 }
 
 // StdOutput
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct StdOutput {
     id: usize,
     target: String,
@@ -391,6 +398,7 @@ impl StdOutput {
     }
 
     pub fn stop(&mut self) {
+        debug!("in task stop");
         self.state = State::Finished;
         self.textbox_output.clear();
     }
