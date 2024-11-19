@@ -15,6 +15,7 @@ use iced::Length::Fill;
 use iced::{Element, Font, Subscription, Task, Theme};
 use once_cell::sync::Lazy;
 use task_runners::makefile::*;
+use tokio::time::{self, Instant};
 use utils::{async_read_lines, Error};
 
 use std::fmt::Debug;
@@ -359,29 +360,34 @@ fn icon<'a, Message>(codepoint: char) -> Element<'a, Message> {
 }
 
 // StdOutput
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct StdOutput {
     id: usize,
     target: String,
     state: State,
     textbox_output: Vec<String>,
+    tick: Instant,
+    ms_200: core::time::Duration,
 }
 
 #[derive(Debug, Clone)]
 enum State {
     Idle,
-    Streaming { stream: String },
+    Streaming { stream: Vec<String> },
     Finished,
     Errored,
 }
 
 impl StdOutput {
     pub fn new(id: usize, target: String) -> Self {
+        let mut tick = Instant::now();
         Self {
             id,
             target,
             state: State::Idle,
             textbox_output: Vec::new(),
+            tick,
+            ms_200: core::time::Duration::from_millis(200),
         }
     }
     pub fn target(&self) -> String {
@@ -392,7 +398,7 @@ impl StdOutput {
         match self.state {
             State::Idle { .. } | State::Finished { .. } | State::Errored { .. } => {
                 self.state = State::Streaming {
-                    stream: String::from("Stream started..."),
+                    stream: vec!["Stream started...".to_string()],
                 };
             }
             State::Streaming { .. } => {}
@@ -408,15 +414,14 @@ impl StdOutput {
         if let State::Streaming { stream } = &mut self.state {
             match output_update {
                 Ok(worker::Stdout::OutputUpdate { output }) => {
-                    self.textbox_output.push(output.clone());
-                    *stream = output
+                    self.textbox_output.extend(output);
+                    // *stream = output
                 }
                 Ok(worker::Stdout::Finished) => {
                     self.state = State::Finished;
                 }
                 Ok(worker::Stdout::Prepare { output }) => {
-                    self.textbox_output.push(output.clone());
-                    *stream = output
+                    self.textbox_output.extend(output);
                 }
 
                 Err(worker::Error::NoContent) => {
@@ -426,6 +431,11 @@ impl StdOutput {
                     self.state = State::Errored;
                 }
             }
+        }
+        if self.tick.elapsed() >= self.ms_200 && self.textbox_output.len() > 1_000_000 {
+            let r = self.textbox_output.len() - 1_000_000;
+            self.textbox_output.drain(..r);
+            self.tick = Instant::now();
         }
     }
     pub fn subscription(&self) -> Subscription<Message> {
