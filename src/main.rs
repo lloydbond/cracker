@@ -6,9 +6,10 @@ mod task_runners;
 mod utils;
 
 use iced::alignment::Horizontal::Left;
+use iced::widget::scrollable::RelativeOffset;
 use iced::widget::{
     self, button, column, container, horizontal_space, pick_list, row, scrollable, text, tooltip,
-    Column,
+    Column, Scrollable,
 };
 use iced::Alignment::Center;
 use iced::Length::Fill;
@@ -61,7 +62,7 @@ pub enum Message {
 
     ScrollToBeginning,
     ScrollToEnd,
-    ScorllAutoToggle,
+    ScrollAutoToggle,
     Scrolled(scrollable::Viewport),
 }
 
@@ -77,7 +78,7 @@ impl Editor {
                 scrollbar_width: 15,
                 scrollbar_margin: 0,
                 scroller_width: 10,
-                current_scroll_offset: scrollable::RelativeOffset::START,
+                current_scroll_offset: scrollable::RelativeOffset::END,
                 anchor: scrollable::Anchor::Start,
             },
             Task::batch([
@@ -97,7 +98,6 @@ impl Editor {
             Message::TaskMake(id, target) => {
                 for task in self.tasks.iter_mut() {
                     task.stop();
-                    debug!("task ({:?}) stopped", task.target());
                 }
                 let mut task = StdOutput::new(id, target);
                 task.start();
@@ -109,7 +109,6 @@ impl Editor {
                 let mut msg_next = Task::none();
                 if let Some(task_id) = self.tasks.iter().position(|t| t.id == id) {
                     self.tasks[task_id].start();
-                    debug!("task ({:?}) started", self.tasks[task_id].target());
                 } else {
                     msg_next = Task::done(Message::TaskMake(id, target));
                 }
@@ -121,7 +120,6 @@ impl Editor {
 
                 if let Some(task_id) = self.tasks.iter().position(|t| t.id == id) {
                     if let Some(task) = self.tasks.get_mut(task_id) {
-                        debug!("task {task:?}");
                         task.stop();
                     }
                 }
@@ -129,21 +127,22 @@ impl Editor {
                 Task::none()
             }
             Message::TaskUpdate((id, output)) => {
+                let mut next_task = Task::none();
                 if let Some(task_id) = self.tasks.iter().position(|t| t.id == id) {
                     if let Some(task) = self.tasks.get_mut(task_id) {
                         task.stream_update(output);
                     }
                     if self.auto_scroll {
-                        return Task::done(Message::ScrollToEnd);
+                        next_task = Task::done(Message::ScrollToEnd);
                     }
                 }
-                Task::none()
+
+                next_task
             }
-            Message::ScorllAutoToggle => {
-                debug!("auto scroll? {:#}", self.auto_scroll);
+            Message::ScrollAutoToggle => {
                 self.auto_scroll = !self.auto_scroll;
-                debug!("auto scroll? {:#}", self.auto_scroll);
-                Task::none()
+                let offset = scrollable::AbsoluteOffset { x: 0.00, y: 59.0 };
+                scrollable::scroll_by(SCROLLABLE_ID.clone(), offset)
             }
             Message::Reload => Task::done(Message::LoadMakeTargetsPEG),
             Message::LoadMakeTargetsPEG => {
@@ -158,7 +157,6 @@ impl Editor {
                             self.targets.extend(t);
                         }
                     }
-                    debug!("Found targets: {:?}", self.targets);
                 }
                 Task::none()
             }
@@ -170,7 +168,6 @@ impl Editor {
             }
             Message::ScrollToEnd => {
                 self.current_scroll_offset = scrollable::RelativeOffset::END;
-
                 scrollable::snap_to(SCROLLABLE_ID.clone(), self.current_scroll_offset)
             }
             Message::Scrolled(viewport) => {
@@ -203,7 +200,7 @@ impl Editor {
             action(
                 fast_forward_icon(),
                 "auto scroll",
-                Some(Message::ScorllAutoToggle),
+                Some(Message::ScrollAutoToggle),
             )
         };
         let scroll_to_beginning_button = || {
@@ -380,7 +377,7 @@ enum State {
 
 impl StdOutput {
     pub fn new(id: usize, target: String) -> Self {
-        let mut tick = Instant::now();
+        let tick = Instant::now();
         Self {
             id,
             target,
@@ -395,6 +392,7 @@ impl StdOutput {
     }
 
     pub fn start(&mut self) {
+        info!("start task {:?}", self.target());
         match self.state {
             State::Idle { .. } | State::Finished { .. } | State::Errored { .. } => {
                 self.state = State::Streaming {
@@ -406,14 +404,14 @@ impl StdOutput {
     }
 
     pub fn stop(&mut self) {
-        debug!("in task stop");
+        info!("stopping task {:?}", self.target());
         self.state = State::Finished;
         let end_stream = vec!["".to_string(), "stream ended...".to_string()];
         self.textbox_output.extend(end_stream);
         // self.textbox_output.clear();
     }
     pub fn stream_update(&mut self, output_update: Result<worker::Stdout, worker::Error>) {
-        if let State::Streaming { stream } = &mut self.state {
+        if let State::Streaming { .. } = &mut self.state {
             match output_update {
                 Ok(worker::Stdout::OutputUpdate { output }) => {
                     self.textbox_output.extend(output);
@@ -443,7 +441,6 @@ impl StdOutput {
     pub fn subscription(&self) -> Subscription<Message> {
         match self.state {
             State::Streaming { .. } => {
-                debug!("{:?} subscribed", self.target.clone());
                 worker::subscription(self.id, self.target.clone()).map(Message::TaskUpdate)
             }
             _ => Subscription::none(),
@@ -451,7 +448,6 @@ impl StdOutput {
     }
 
     pub fn view(&self) -> Element<Message> {
-        debug!("output_buffer len: {:?}", self.textbox_output.len());
         fn get_window(len: usize, width: usize) -> usize {
             if len > width {
                 return len - width;

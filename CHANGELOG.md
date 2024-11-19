@@ -3,7 +3,7 @@
 
 -   output displayed now when stopped
 -   output buffer increased to 1_000 when streaming stopped.
--   
+-   auto scroll / stop auto scroll working better now
 
 [v0.7.0] 2024-11-18
 -------------------
