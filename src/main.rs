@@ -408,7 +408,9 @@ impl StdOutput {
     pub fn stop(&mut self) {
         debug!("in task stop");
         self.state = State::Finished;
-        self.textbox_output.clear();
+        let end_stream = vec!["".to_string(), "stream ended...".to_string()];
+        self.textbox_output.extend(end_stream);
+        // self.textbox_output.clear();
     }
     pub fn stream_update(&mut self, output_update: Result<worker::Stdout, worker::Error>) {
         if let State::Streaming { stream } = &mut self.state {
@@ -456,7 +458,13 @@ impl StdOutput {
             }
             0
         }
-        let idx = get_window(self.textbox_output.len(), 100);
+        let idx = get_window(
+            self.textbox_output.len(),
+            match self.state {
+                State::Finished => 1_000,
+                _ => 100,
+            },
+        );
         Column::with_children(
             self.textbox_output[idx..]
                 .iter()

@@ -1,3 +1,10 @@
+[v0.8.0] 2024-11-18
+-------------------
+
+-   output displayed now when stopped
+-   output buffer increased to 1_000 when streaming stopped.
+-   
+
 [v0.7.0] 2024-11-18
 -------------------
 
