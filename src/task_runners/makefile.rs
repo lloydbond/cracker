@@ -126,6 +126,7 @@ pub mod worker {
 
     use tokio::io::{AsyncBufReadExt, BufReader};
     use tokio::process::Command;
+    use tokio::time;
 
     use std::hash::Hash;
     use std::process::Stdio;
@@ -133,8 +134,8 @@ pub mod worker {
 
     #[derive(Debug, Clone, PartialEq)]
     pub enum Stdout {
-        Prepare { output: String },
-        OutputUpdate { output: String },
+        Prepare { output: Vec<String> },
+        OutputUpdate { output: Vec<String> },
         Finished,
     }
 
@@ -164,10 +165,10 @@ pub mod worker {
         try_channel(1, |mut output| async move {
             let _ = output
                 .send(Stdout::OutputUpdate {
-                    output: String::from(""),
+                    output: vec!["".to_string()],
                 })
                 .await;
-
+            debug!("initialize worker: {target}");
             let mut cmd = Command::new("make");
 
             // Specify that we want the command's standard output piped back to us.
@@ -189,24 +190,38 @@ pub mod worker {
                 .take()
                 .expect("child did not have a handle to stdout");
             let mut reader = BufReader::new(stdout).lines();
-            while let result = reader.next_line().await {
-                use iced::futures::StreamExt;
-                match result {
-                    Ok(line) => match line {
-                        Some(l) => {
-                            let _ = output.send(Stdout::OutputUpdate { output: l }).await;
+            let mut cache: Vec<String> = Vec::new();
+            let interval = time::interval(time::Duration::from_millis(80));
+            tokio::pin!(interval);
+            loop {
+                tokio::select! {
+                    _ = interval.tick() => {
+                        if cache.is_empty() {
+                            continue;
                         }
-                        None => {
-                            break;
+                        let _ = output.send( Stdout::OutputUpdate {output: cache.clone() }).await;
+                        cache.clear();
+                    }
+                    maybe_result = reader.next_line() => {
+                        match maybe_result {
+                        Ok(Some(line)) => {
+                            cache.push(line);
                         }
-                    },
-                    Err(_) => {
-                        println!("file stream error:");
+                        _ => break,
+                        }
                     }
                 }
             }
+            if !cache.is_empty() {
+                let _ = output
+                    .send(Stdout::OutputUpdate {
+                        output: cache.clone(),
+                    })
+                    .await;
+                cache.clear();
+            }
             let _ = output.send(Stdout::Finished).await;
-
+            debug!("leaving worker");
             Ok(())
         })
     }
