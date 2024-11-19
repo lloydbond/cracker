@@ -1,4 +1,4 @@
-[v0.8.0] 2024-11-18
+[v0.8.0] 2024-11-19
 -------------------
 
 -   output displayed now when stopped
