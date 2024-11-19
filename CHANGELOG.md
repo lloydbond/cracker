@@ -1,8 +1,9 @@
-[v0.7.0] 2024-11-17
+[v0.7.0] 2024-11-18
 -------------------
 
 -   streaming a stdout should be smoother now.
 -   Autoscroll added
+-   stop button added
 
 [v0.6.0] 2024-11-16
 -------------------
