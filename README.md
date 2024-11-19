@@ -32,6 +32,13 @@ cargo install --path .
   ck
 ```
 
+### Enable Log messages
+Log messages are limited for as the tool reaches a 1.0 release.
+```bash
+  RUST_LOG=ck=[warn|info|error|debug] ck
+
+  RUST_LOG=ck=debug ck
+```
 ## TODO:
 - [x] Asynchronously open Makefile
 - [x] handle multi-target Makefile rules
