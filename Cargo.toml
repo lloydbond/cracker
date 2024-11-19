@@ -2,7 +2,7 @@
 name = "cracker"
 include = ["src/**/*", "README.md"]
 default-run = "ck"
-version = "0.8.0"
+version = "0.9.0"
 edition = "2021"
 license = "GPL-3.0"
 description = "Cracker is a simple, fast, and plain task runner. Designed with the idea of supporting as many task tools as possible."
@@ -13,6 +13,7 @@ name = "ck"
 path = "src/main.rs"
 
 [dependencies]
+getopts = "0.2.21"
 iced = {version = "0.13.1", features = ["debug", "tokio", "highlighter", "lazy"]}
 itertools = "0.13.0"
 log = "0.4.22"

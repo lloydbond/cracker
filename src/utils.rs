@@ -10,13 +10,13 @@ pub enum Error {
 
 pub async fn async_read_lines<P>(filename: P) -> Result<Arc<String>, Error>
 where
-    P: AsRef<Path> + Debug + Clone + Copy,
+    P: AsRef<Path> + Debug + Clone,
 {
-    let contents = fs::read_to_string(filename)
+    let contents = fs::read_to_string(filename.clone())
         .await
         .map(Arc::new)
         .map_err(|error| Error::IoError(error.kind()))?;
-    debug!("makefile ({filename:#?}) loaded");
+    debug!("makefile ({:?}) loaded", filename.clone());
 
     Ok(contents)
 }
