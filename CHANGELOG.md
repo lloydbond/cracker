@@ -1,7 +1,8 @@
 [v0.11.0] 2024-11-19
 -------------------
 
-- moved arguement parsting to module  
+- moved arguement parsing to module  
+- simplify task_runner module
 
 [v0.10.0] 2024-11-19
 -------------------
