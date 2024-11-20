@@ -1,12 +1,13 @@
 extern crate pretty_env_logger;
 #[macro_use]
 extern crate log;
-extern crate getopts;
 
+mod args;
+mod stdout;
 mod task_runners;
 mod utils;
 
-use getopts::Options;
+use args::parse_args;
 use iced::alignment::Horizontal::Left;
 use iced::widget::{
     self, button, column, container, horizontal_space, pick_list, row, scrollable, text, tooltip,
@@ -18,49 +19,16 @@ use iced::{Element, Font, Subscription, Task, Theme};
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use std::env;
-use task_runners::makefile::*;
+use stdout::worker::{self, StdCommand};
+use task_runners::makefile::{self, parser};
 use tokio::time::Instant;
 use utils::{async_read_lines, Error};
 
 use std::fmt::Debug;
 use std::sync::Arc;
 
-const PROGRAM_DESC: &'static str = env!("CARGO_PKG_DESCRIPTION");
-const PROGRAM_NAME: &'static str = env!("CARGO_PKG_NAME");
 static SCROLLABLE_ID: Lazy<scrollable::Id> = Lazy::new(scrollable::Id::unique);
 
-fn print_usage(program: &str, opts: Options) {
-    let brief = format!("Usage: {} FILE [options]", program);
-    print!(
-        "Welcome to {}\n{}\n{}",
-        PROGRAM_NAME,
-        PROGRAM_DESC,
-        opts.usage(&brief)
-    );
-}
-
-fn parse_args(args: &Vec<String>) -> Result<String, Error> {
-    let program = args[0].clone();
-
-    let mut opts = Options::new();
-    opts.optflag("h", "help", "print this help menu");
-    let matches = match opts.parse(&args[1..]) {
-        Ok(m) => m,
-        Err(f) => {
-            panic!("{}", f.to_string())
-        }
-    };
-    if matches.opt_present("h") {
-        print_usage(&program, opts);
-        return Ok(String::new());
-    }
-    let filename = if !matches.free.is_empty() {
-        matches.free[0].clone()
-    } else {
-        "Makefile".to_string()
-    };
-    Ok(filename)
-}
 pub fn main() -> iced::Result {
     pretty_env_logger::init();
     debug!("start ck");
@@ -70,7 +38,6 @@ pub fn main() -> iced::Result {
         return Ok(());
     };
 
-    // let args: Vec<String> = env::args().collect();
     iced::application("Editor - Iced", Editor::update, Editor::view)
         .subscription(Editor::subscription)
         .theme(Editor::theme)
@@ -84,7 +51,7 @@ struct Editor {
     filename: String,
     theme: Theme,
     targets: Vec<String>,
-    tasks: Vec<StdOutput>,
+    task_history: Vec<StdOutput>,
 
     auto_scroll: bool,
     scrollbar_width: u16,
@@ -100,7 +67,6 @@ pub enum Message {
     ParseMakeTargets(std::result::Result<Arc<String>, Error>),
     Reload,
     TaskMake(usize, String),
-    TaskStart(usize, String),
     TaskUpdate((usize, Result<worker::Stdout, worker::Error>)),
     TaskStop(usize),
     ThemeSelected(Theme),
@@ -118,7 +84,7 @@ impl Editor {
                 filename,
                 theme: Theme::CatppuccinMocha,
                 targets: Vec::new(),
-                tasks: Vec::new(),
+                task_history: Vec::new(),
 
                 auto_scroll: true,
                 scrollbar_width: 15,
@@ -142,42 +108,43 @@ impl Editor {
                 Task::none()
             }
             Message::TaskMake(id, target) => {
-                for task in self.tasks.iter_mut() {
-                    task.stop();
+                fn trim_task_history(tasks: &mut Vec<StdOutput>) {
+                    if tasks.len() >= 100 {
+                        let r = tasks.len() - 100;
+                        tasks.drain(..r);
+                    }
                 }
+                if let Some(task) = self.task_history.last_mut() {
+                    if task.id == id {
+                        task.stop();
+                    }
+                };
                 let mut task = StdOutput::new(id, target);
                 task.start();
-                self.tasks.push(task);
+                self.task_history.push(task);
+                trim_task_history(&mut self.task_history);
 
                 Task::none()
-            }
-            Message::TaskStart(id, target) => {
-                let mut msg_next = Task::none();
-                if let Some(task_id) = self.tasks.iter().position(|t| t.id == id) {
-                    self.tasks[task_id].start();
-                } else {
-                    msg_next = Task::done(Message::TaskMake(id, target));
-                }
-
-                msg_next
             }
             Message::TaskStop(id) => {
                 debug!("stop id: {id:?}");
 
-                if let Some(task_id) = self.tasks.iter().position(|t| t.id == id) {
-                    if let Some(task) = self.tasks.get_mut(task_id) {
+                if let Some(task) = self.task_history.last_mut() {
+                    if task.id == id {
                         task.stop();
                     }
                 }
+
                 debug!("task stop??");
                 Task::none()
             }
             Message::TaskUpdate((id, output)) => {
                 let mut next_task = Task::none();
-                if let Some(task_id) = self.tasks.iter().position(|t| t.id == id) {
-                    if let Some(task) = self.tasks.get_mut(task_id) {
+                if let Some(task) = self.task_history.last_mut() {
+                    if task.id == id {
                         task.stream_update(output);
                     }
+
                     if self.auto_scroll {
                         next_task = Task::done(Message::ScrollToEnd);
                     }
@@ -199,7 +166,7 @@ impl Editor {
             Message::ParseMakeTargets(result) => {
                 if let Ok(contents) = result {
                     for line in contents.lines() {
-                        let target = parser::grammar::Targets(line);
+                        let target = parser::Targets(line);
                         if let Ok(t) = target {
                             self.targets.extend(t);
                         }
@@ -225,10 +192,10 @@ impl Editor {
         }
     }
     fn subscription(&self) -> Subscription<Message> {
-        if self.tasks.is_empty() {
+        if self.task_history.is_empty() {
             return Subscription::none();
         }
-        Subscription::batch(self.tasks.iter().map(StdOutput::subscription))
+        Subscription::batch(self.task_history.iter().map(StdOutput::subscription))
     }
 
     fn view(&self) -> Element<Message> {
@@ -274,14 +241,14 @@ impl Editor {
                 action(
                     start_icon(),
                     target,
-                    Some(Message::TaskStart(id, target.clone())),
+                    Some(Message::TaskMake(id, target.clone())),
                 ),
                 target,
                 action(stop_icon(), "stop", Some(Message::TaskStop(id))),
             ));
         }
         let text_box: Column<Message> =
-            Column::with_children(self.tasks.iter().map(StdOutput::view));
+            Column::with_children(self.task_history.iter().map(StdOutput::view));
         let scrollable_stdout: Element<Message> = Element::from(
             scrollable(
                 column![text_box,]
@@ -407,7 +374,7 @@ fn icon<'a, Message>(codepoint: char) -> Element<'a, Message> {
 #[derive(Debug)]
 struct StdOutput {
     id: usize,
-    target: String,
+    command: StdCommand,
     state: State,
     textbox_output: Vec<String>,
     tick: Instant,
@@ -427,7 +394,7 @@ impl StdOutput {
         let tick = Instant::now();
         Self {
             id,
-            target,
+            command: makefile::new(target),
             state: State::Idle,
             textbox_output: Vec::new(),
             tick,
@@ -435,7 +402,7 @@ impl StdOutput {
         }
     }
     pub fn target(&self) -> String {
-        self.target.clone()
+        self.command.target()
     }
 
     pub fn start(&mut self) {
@@ -455,7 +422,6 @@ impl StdOutput {
         self.state = State::Finished;
         let end_stream = vec!["".to_string(), "stream ended...".to_string()];
         self.textbox_output.extend(end_stream);
-        // self.textbox_output.clear();
     }
     pub fn stream_update(&mut self, output_update: Result<worker::Stdout, worker::Error>) {
         if let State::Streaming { .. } = &mut self.state {
@@ -488,7 +454,7 @@ impl StdOutput {
     pub fn subscription(&self) -> Subscription<Message> {
         match self.state {
             State::Streaming { .. } => {
-                worker::subscription(self.id, self.target.clone()).map(Message::TaskUpdate)
+                worker::subscription(self.id, self.command.clone()).map(Message::TaskUpdate)
             }
             _ => Subscription::none(),
         }
