@@ -18,7 +18,6 @@ use iced::Length::Fill;
 use iced::{Element, Font, Subscription, Task, Theme};
 use itertools::Itertools;
 use once_cell::sync::Lazy;
-use std::collections::{BTreeMap, HashMap};
 use std::env;
 use stdout::worker::{self, StdCommand};
 use task_runners::makefile::{self, parser};
@@ -52,7 +51,7 @@ struct Editor {
     filename: String,
     theme: Theme,
     targets: Vec<String>,
-    tasks: BTreeMap<usize, StdOutput>,
+    task_history: Vec<StdOutput>,
 
     auto_scroll: bool,
     scrollbar_width: u16,
@@ -68,7 +67,6 @@ pub enum Message {
     ParseMakeTargets(std::result::Result<Arc<String>, Error>),
     Reload,
     TaskMake(usize, String),
-    TaskStart(usize, String),
     TaskUpdate((usize, Result<worker::Stdout, worker::Error>)),
     TaskStop(usize),
     ThemeSelected(Theme),
@@ -86,7 +84,7 @@ impl Editor {
                 filename,
                 theme: Theme::CatppuccinMocha,
                 targets: Vec::new(),
-                tasks: BTreeMap::new(),
+                task_history: Vec::new(),
 
                 auto_scroll: true,
                 scrollbar_width: 15,
@@ -110,30 +108,31 @@ impl Editor {
                 Task::none()
             }
             Message::TaskMake(id, target) => {
-                for (_, task) in self.tasks.iter_mut() {
-                    task.stop();
+                fn trim_task_history(tasks: &mut Vec<StdOutput>) {
+                    if tasks.len() >= 100 {
+                        let r = tasks.len() - 100;
+                        tasks.drain(..r);
+                    }
                 }
+                if let Some(task) = self.task_history.last_mut() {
+                    if task.id == id {
+                        task.stop();
+                    }
+                };
                 let mut task = StdOutput::new(id, target);
                 task.start();
-                self.tasks.insert(id, task);
+                self.task_history.push(task);
+                trim_task_history(&mut self.task_history);
 
                 Task::none()
-            }
-            Message::TaskStart(id, target) => {
-                let mut msg_next = Task::none();
-                if let Some(task) = self.tasks.get_mut(&id) {
-                    task.start();
-                } else {
-                    msg_next = Task::done(Message::TaskMake(id, target));
-                }
-
-                msg_next
             }
             Message::TaskStop(id) => {
                 debug!("stop id: {id:?}");
 
-                if let Some(task) = self.tasks.get_mut(&id) {
-                    task.stop();
+                if let Some(task) = self.task_history.last_mut() {
+                    if task.id == id {
+                        task.stop();
+                    }
                 }
 
                 debug!("task stop??");
@@ -141,8 +140,10 @@ impl Editor {
             }
             Message::TaskUpdate((id, output)) => {
                 let mut next_task = Task::none();
-                if let Some(task) = self.tasks.get_mut(&id) {
-                    task.stream_update(output);
+                if let Some(task) = self.task_history.last_mut() {
+                    if task.id == id {
+                        task.stream_update(output);
+                    }
 
                     if self.auto_scroll {
                         next_task = Task::done(Message::ScrollToEnd);
@@ -191,10 +192,10 @@ impl Editor {
         }
     }
     fn subscription(&self) -> Subscription<Message> {
-        if self.tasks.is_empty() {
+        if self.task_history.is_empty() {
             return Subscription::none();
         }
-        Subscription::batch(self.tasks.values().map(StdOutput::subscription))
+        Subscription::batch(self.task_history.iter().map(StdOutput::subscription))
     }
 
     fn view(&self) -> Element<Message> {
@@ -240,14 +241,14 @@ impl Editor {
                 action(
                     start_icon(),
                     target,
-                    Some(Message::TaskStart(id, target.clone())),
+                    Some(Message::TaskMake(id, target.clone())),
                 ),
                 target,
                 action(stop_icon(), "stop", Some(Message::TaskStop(id))),
             ));
         }
         let text_box: Column<Message> =
-            Column::with_children(self.tasks.values().map(StdOutput::view));
+            Column::with_children(self.task_history.iter().map(StdOutput::view));
         let scrollable_stdout: Element<Message> = Element::from(
             scrollable(
                 column![text_box,]
