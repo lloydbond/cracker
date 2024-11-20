@@ -3,6 +3,7 @@ extern crate pretty_env_logger;
 extern crate log;
 
 mod args;
+mod stdout;
 mod task_runners;
 mod utils;
 
@@ -18,7 +19,8 @@ use iced::{Element, Font, Subscription, Task, Theme};
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use std::env;
-use task_runners::makefile::{worker, parser};
+use stdout::worker::{self, StdCommand};
+use task_runners::makefile::{self, parser};
 use tokio::time::Instant;
 use utils::{async_read_lines, Error};
 
@@ -164,7 +166,7 @@ impl Editor {
             Message::ParseMakeTargets(result) => {
                 if let Ok(contents) = result {
                     for line in contents.lines() {
-                        let target = parser::grammar::Targets(line);
+                        let target = parser::Targets(line);
                         if let Ok(t) = target {
                             self.targets.extend(t);
                         }
@@ -372,7 +374,7 @@ fn icon<'a, Message>(codepoint: char) -> Element<'a, Message> {
 #[derive(Debug)]
 struct StdOutput {
     id: usize,
-    target: String,
+    command: StdCommand,
     state: State,
     textbox_output: Vec<String>,
     tick: Instant,
@@ -392,7 +394,7 @@ impl StdOutput {
         let tick = Instant::now();
         Self {
             id,
-            target,
+            command: makefile::new(target),
             state: State::Idle,
             textbox_output: Vec::new(),
             tick,
@@ -400,7 +402,7 @@ impl StdOutput {
         }
     }
     pub fn target(&self) -> String {
-        self.target.clone()
+        self.command.target()
     }
 
     pub fn start(&mut self) {
@@ -453,7 +455,7 @@ impl StdOutput {
     pub fn subscription(&self) -> Subscription<Message> {
         match self.state {
             State::Streaming { .. } => {
-                worker::subscription(self.id, self.target.clone()).map(Message::TaskUpdate)
+                worker::subscription(self.id, self.command.clone()).map(Message::TaskUpdate)
             }
             _ => Subscription::none(),
         }
