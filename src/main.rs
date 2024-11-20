@@ -18,6 +18,7 @@ use iced::Length::Fill;
 use iced::{Element, Font, Subscription, Task, Theme};
 use itertools::Itertools;
 use once_cell::sync::Lazy;
+use std::collections::{BTreeMap, HashMap};
 use std::env;
 use stdout::worker::{self, StdCommand};
 use task_runners::makefile::{self, parser};
@@ -51,7 +52,7 @@ struct Editor {
     filename: String,
     theme: Theme,
     targets: Vec<String>,
-    tasks: Vec<StdOutput>,
+    tasks: BTreeMap<usize, StdOutput>,
 
     auto_scroll: bool,
     scrollbar_width: u16,
@@ -85,7 +86,7 @@ impl Editor {
                 filename,
                 theme: Theme::CatppuccinMocha,
                 targets: Vec::new(),
-                tasks: Vec::new(),
+                tasks: BTreeMap::new(),
 
                 auto_scroll: true,
                 scrollbar_width: 15,
@@ -109,19 +110,19 @@ impl Editor {
                 Task::none()
             }
             Message::TaskMake(id, target) => {
-                for task in self.tasks.iter_mut() {
+                for (_, task) in self.tasks.iter_mut() {
                     task.stop();
                 }
                 let mut task = StdOutput::new(id, target);
                 task.start();
-                self.tasks.push(task);
+                self.tasks.insert(id, task);
 
                 Task::none()
             }
             Message::TaskStart(id, target) => {
                 let mut msg_next = Task::none();
-                if let Some(task_id) = self.tasks.iter().position(|t| t.id == id) {
-                    self.tasks[task_id].start();
+                if let Some(task) = self.tasks.get_mut(&id) {
+                    task.start();
                 } else {
                     msg_next = Task::done(Message::TaskMake(id, target));
                 }
@@ -131,20 +132,18 @@ impl Editor {
             Message::TaskStop(id) => {
                 debug!("stop id: {id:?}");
 
-                if let Some(task_id) = self.tasks.iter().position(|t| t.id == id) {
-                    if let Some(task) = self.tasks.get_mut(task_id) {
-                        task.stop();
-                    }
+                if let Some(task) = self.tasks.get_mut(&id) {
+                    task.stop();
                 }
+
                 debug!("task stop??");
                 Task::none()
             }
             Message::TaskUpdate((id, output)) => {
                 let mut next_task = Task::none();
-                if let Some(task_id) = self.tasks.iter().position(|t| t.id == id) {
-                    if let Some(task) = self.tasks.get_mut(task_id) {
-                        task.stream_update(output);
-                    }
+                if let Some(task) = self.tasks.get_mut(&id) {
+                    task.stream_update(output);
+
                     if self.auto_scroll {
                         next_task = Task::done(Message::ScrollToEnd);
                     }
@@ -195,7 +194,7 @@ impl Editor {
         if self.tasks.is_empty() {
             return Subscription::none();
         }
-        Subscription::batch(self.tasks.iter().map(StdOutput::subscription))
+        Subscription::batch(self.tasks.values().map(StdOutput::subscription))
     }
 
     fn view(&self) -> Element<Message> {
@@ -248,7 +247,7 @@ impl Editor {
             ));
         }
         let text_box: Column<Message> =
-            Column::with_children(self.tasks.iter().map(StdOutput::view));
+            Column::with_children(self.tasks.values().map(StdOutput::view));
         let scrollable_stdout: Element<Message> = Element::from(
             scrollable(
                 column![text_box,]
@@ -422,7 +421,6 @@ impl StdOutput {
         self.state = State::Finished;
         let end_stream = vec!["".to_string(), "stream ended...".to_string()];
         self.textbox_output.extend(end_stream);
-        // self.textbox_output.clear();
     }
     pub fn stream_update(&mut self, output_update: Result<worker::Stdout, worker::Error>) {
         if let State::Streaming { .. } = &mut self.state {
