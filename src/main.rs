@@ -18,7 +18,7 @@ use iced::{Element, Font, Subscription, Task, Theme};
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use std::env;
-use task_runners::makefile::*;
+use task_runners::makefile::{worker, parser};
 use tokio::time::Instant;
 use utils::{async_read_lines, Error};
 
@@ -36,7 +36,6 @@ pub fn main() -> iced::Result {
         return Ok(());
     };
 
-    // let args: Vec<String> = env::args().collect();
     iced::application("Editor - Iced", Editor::update, Editor::view)
         .subscription(Editor::subscription)
         .theme(Editor::theme)
