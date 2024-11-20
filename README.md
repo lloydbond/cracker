@@ -50,7 +50,7 @@ Log messages are limited for as the tool reaches a 1.0 release.
   - [ ] taskpy
   - [ ] etc.
 - [x] switch makfile-lossless to PEG for rule target detecion
-- [x] seperate task runner support to library
+- [ ] seperate task runner support to library
 - [ ] cracker-tui
 - [ ] hx/vi compatible keymapping
 - [ ] add to crates.io

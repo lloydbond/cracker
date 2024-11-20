@@ -15,6 +15,7 @@ use iced::widget::{
 use iced::Alignment::Center;
 use iced::Length::Fill;
 use iced::{Element, Font, Subscription, Task, Theme};
+use itertools::Itertools;
 use once_cell::sync::Lazy;
 use std::env;
 use task_runners::makefile::*;
@@ -38,14 +39,10 @@ fn print_usage(program: &str, opts: Options) {
     );
 }
 
-pub fn main() -> iced::Result {
-    pretty_env_logger::init();
-    debug!("start ck");
-    let args: Vec<String> = env::args().collect();
+fn parse_args(args: &Vec<String>) -> Result<String, Error> {
     let program = args[0].clone();
 
     let mut opts = Options::new();
-    opts.optopt("f", "file", "set working Makefile", "Makefile");
     opts.optflag("h", "help", "print this help menu");
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
@@ -55,13 +52,25 @@ pub fn main() -> iced::Result {
     };
     if matches.opt_present("h") {
         print_usage(&program, opts);
+        return Ok(String::new());
+    }
+    let filename = if !matches.free.is_empty() {
+        matches.free[0].clone()
+    } else {
+        "Makefile".to_string()
+    };
+    Ok(filename)
+}
+pub fn main() -> iced::Result {
+    pretty_env_logger::init();
+    debug!("start ck");
+    let filename: String = if let Ok(f) = parse_args(&env::args().collect_vec()) {
+        f
+    } else {
         return Ok(());
-    }
-    let filename = matches.opt_str("f").unwrap_or("Makefile".to_string());
-    let mut input: String = String::new();
-    if !matches.free.is_empty() {
-        input += &matches.free[0].clone();
-    }
+    };
+
+    // let args: Vec<String> = env::args().collect();
     iced::application("Editor - Iced", Editor::update, Editor::view)
         .subscription(Editor::subscription)
         .theme(Editor::theme)
