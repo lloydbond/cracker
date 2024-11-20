@@ -1,12 +1,12 @@
 extern crate pretty_env_logger;
 #[macro_use]
 extern crate log;
-extern crate getopts;
 
+mod args;
 mod task_runners;
 mod utils;
 
-use getopts::Options;
+use args::parse_args;
 use iced::alignment::Horizontal::Left;
 use iced::widget::{
     self, button, column, container, horizontal_space, pick_list, row, scrollable, text, tooltip,
@@ -25,42 +25,8 @@ use utils::{async_read_lines, Error};
 use std::fmt::Debug;
 use std::sync::Arc;
 
-const PROGRAM_DESC: &'static str = env!("CARGO_PKG_DESCRIPTION");
-const PROGRAM_NAME: &'static str = env!("CARGO_PKG_NAME");
 static SCROLLABLE_ID: Lazy<scrollable::Id> = Lazy::new(scrollable::Id::unique);
 
-fn print_usage(program: &str, opts: Options) {
-    let brief = format!("Usage: {} FILE [options]", program);
-    print!(
-        "Welcome to {}\n{}\n{}",
-        PROGRAM_NAME,
-        PROGRAM_DESC,
-        opts.usage(&brief)
-    );
-}
-
-fn parse_args(args: &Vec<String>) -> Result<String, Error> {
-    let program = args[0].clone();
-
-    let mut opts = Options::new();
-    opts.optflag("h", "help", "print this help menu");
-    let matches = match opts.parse(&args[1..]) {
-        Ok(m) => m,
-        Err(f) => {
-            panic!("{}", f.to_string())
-        }
-    };
-    if matches.opt_present("h") {
-        print_usage(&program, opts);
-        return Ok(String::new());
-    }
-    let filename = if !matches.free.is_empty() {
-        matches.free[0].clone()
-    } else {
-        "Makefile".to_string()
-    };
-    Ok(filename)
-}
 pub fn main() -> iced::Result {
     pretty_env_logger::init();
     debug!("start ck");

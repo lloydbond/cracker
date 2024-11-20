@@ -2,7 +2,7 @@
 name = "cracker"
 include = ["src/**/*", "README.md"]
 default-run = "ck"
-version = "0.10.0"
+version = "0.11.0"
 edition = "2021"
 license = "GPL-3.0"
 description = "Cracker is a simple, fast, and plain task runner. Designed with the idea of supporting as many task tools as possible."
