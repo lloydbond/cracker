@@ -1,6 +1,6 @@
 [package]
 name = "cracker"
-include = ["src/**/*", "README.md", "CHANGELOG.md","LISCENSE", "fonts/**/*"]
+include = ["src/**/*", "README.md", "CHANGELOG.md","LISCENSE", "fonts/**/*", "Cargo.toml"]
 default-run = "ck"
 version = "0.11.1"
 edition = "2021"
