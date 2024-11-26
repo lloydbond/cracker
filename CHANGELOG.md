@@ -1,3 +1,11 @@
+[v0.11.1] 2024-11-26
+-------------------
+
+-   setup crate in crate.io
+-   updated readme
+-   update cargo.toml with keyword and category words for crates.io
+-   package name changed from `cracker` to `ck-cracker` for publishing
+
 [v0.11.0] 2024-11-20
 -------------------
 

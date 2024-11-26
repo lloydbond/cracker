@@ -1,11 +1,16 @@
 [package]
-name = "cracker"
-include = ["src/**/*", "README.md"]
+name = "ck-cracker"
+include = ["src/**/*", "README.md", "CHANGELOG.md","LISCENSE", "fonts/**/*", "Cargo.toml"]
 default-run = "ck"
-version = "0.11.0"
+version = "0.11.1"
 edition = "2021"
 license = "GPL-3.0"
+reademe = "README.md"
+repository = "https://github.com/lloydbond/cracker"
+homepage = "https://github.com/lloydbond/cracker"
 description = "Cracker is a simple, fast, and plain task runner. Designed with the idea of supporting as many task tools as possible."
+keywords = ["makefile","tasks","taskrunner"]
+categories = ["command-line-utilities", "development-tools::build-utils"]
 authors = ["Lloyd Bond"]
 
 [[bin]]
