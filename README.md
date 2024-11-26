@@ -13,8 +13,16 @@ Be sure to add $HOME/.cargo/bin/ to your environment PATH variable.
 -  *Windows Subsystem for Linux (WSL)
 
 \* untested, should work.
+## Installation Methods
+### Install with cargo
+If you haven't isntalled `cargo` yet, now's a good time.
+Follow the cargo install instructions [here](https://doc.rust-lang.org/cargo/getting-started/installation.html)
+Then run from your terminal.
+```bash
+cargo install ck-cracker
+```
 
-## Manual Installation
+### Manual Installation
 
 Clone the repository:
 

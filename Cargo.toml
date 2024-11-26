@@ -9,6 +9,8 @@ reademe = "README.md"
 repository = "https://github.com/lloydbond/cracker"
 homepage = "https://github.com/lloydbond/cracker"
 description = "Cracker is a simple, fast, and plain task runner. Designed with the idea of supporting as many task tools as possible."
+keywords = ["makefile","tasks","taskrunner"]
+categories = ["command-line-utilities", "development-tools::build-tools"]
 authors = ["Lloyd Bond"]
 
 [[bin]]
