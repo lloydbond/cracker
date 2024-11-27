@@ -9,15 +9,12 @@ mod task_runners;
 mod utils;
 mod widgets;
 
-use crate::widgets::action;
-use crate::widgets::target_card;
 use args::parse_args;
 use iced::alignment::Horizontal::Left;
 use iced::widget::{self, column, horizontal_space, pick_list, row, scrollable, text, Column};
 use iced::Alignment::Center;
 use iced::Length::Fill;
 use iced::{Element, Font, Subscription, Task, Theme};
-use icons::{down_icon, fast_forward_icon, reload_icon, start_icon, stop_icon, up_icon};
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use std::env;
@@ -35,9 +32,7 @@ pub fn main() -> iced::Result {
     pretty_env_logger::init();
     debug!("start ck");
 
-    let result = parse_args(&env::args().collect_vec());
-
-    let filename = match result {
+    let filename = match parse_args(&env::args().collect_vec()) {
         Ok(f) => {
             debug!("file returned: {}", f);
             f
@@ -170,8 +165,11 @@ impl Editor {
             Message::Reload => Task::done(Message::LoadMakeTargetsPEG),
             Message::LoadMakeTargetsPEG => {
                 self.targets.clear();
-                let filename = self.filename.clone();
-                Task::perform(async_read_lines(filename), Message::ParseMakeTargets)
+
+                Task::perform(
+                    async_read_lines(self.filename.clone()),
+                    Message::ParseMakeTargets,
+                )
             }
             Message::ParseMakeTargets(result) => {
                 if let Ok(contents) = result {
@@ -182,6 +180,7 @@ impl Editor {
                         }
                     }
                 }
+
                 Task::none()
             }
 
@@ -192,6 +191,7 @@ impl Editor {
             }
             Message::ScrollToEnd => {
                 self.current_scroll_offset = scrollable::RelativeOffset::END;
+
                 scrollable::snap_to(SCROLLABLE_ID.clone(), self.current_scroll_offset)
             }
             Message::Scrolled(viewport) => {
@@ -210,7 +210,7 @@ impl Editor {
 
     fn view(&self) -> Element<Message> {
         let controls = row![
-            action(reload_icon(), "reload", Some(Message::Reload)),
+            widgets::action(icons::reload_icon(), "reload", Some(Message::Reload)),
             horizontal_space(),
             pick_list(Theme::ALL, Some(self.theme.clone()), Message::ThemeSelected)
                 .text_size(14)
@@ -218,18 +218,23 @@ impl Editor {
         ]
         .spacing(10)
         .align_y(Center);
-        let scroll_to_end_button =
-            || action(down_icon(), "Scroll to end", Some(Message::ScrollToEnd));
+        let scroll_to_end_button = || {
+            widgets::action(
+                icons::down_icon(),
+                "Scroll to end",
+                Some(Message::ScrollToEnd),
+            )
+        };
         let scroll_auto_on_off_button = || {
-            action(
-                fast_forward_icon(),
+            widgets::action(
+                icons::fast_forward_icon(),
                 "auto scroll",
                 Some(Message::ScrollAutoToggle),
             )
         };
         let scroll_to_beginning_button = || {
-            action(
-                up_icon(),
+            widgets::action(
+                icons::up_icon(),
                 "Scroll to beginning",
                 Some(Message::ScrollToBeginning),
             )
@@ -247,14 +252,14 @@ impl Editor {
         let status = row![].spacing(10);
         let mut targets = Vec::new();
         for (id, target) in self.targets.iter().enumerate() {
-            targets.push(target_card(
-                action(
-                    start_icon(),
+            targets.push(widgets::target_card(
+                widgets::action(
+                    icons::start_icon(),
                     target,
                     Some(Message::TaskMake(id, target.clone())),
                 ),
                 target,
-                action(stop_icon(), "stop", Some(Message::TaskStop(id))),
+                widgets::action(icons::stop_icon(), "stop", Some(Message::TaskStop(id))),
             ));
         }
         let text_box: Column<Message> =
@@ -282,7 +287,6 @@ impl Editor {
         let scrollable_targets: Element<Message> = Element::from(
             scrollable(
                 Column::from_vec(targets)
-                    // column![text_box,]
                     .align_x(Left)
                     .padding([10, 0])
                     .spacing(10),
@@ -302,16 +306,10 @@ impl Editor {
 
         let row_of_scrollables = row![scrollable_targets, scrollable_stdout,];
 
-        column![
-            controls,
-            controls_output,
-            row_of_scrollables,
-            // text_box,
-            status,
-        ]
-        .spacing(10)
-        .padding(10)
-        .into()
+        column![controls, controls_output, row_of_scrollables, status,]
+            .spacing(10)
+            .padding(10)
+            .into()
     }
 
     fn theme(&self) -> Theme {
