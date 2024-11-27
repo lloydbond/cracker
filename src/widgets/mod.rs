@@ -1,3 +1,5 @@
+pub mod stdoutput;
+
 use iced::{
     widget::{button, container, row, tooltip},
     Element,
