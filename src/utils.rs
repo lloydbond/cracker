@@ -6,6 +6,7 @@ use tokio::{fs, io};
 #[derive(Debug, Clone, PartialEq)]
 pub enum Error {
     IoError(io::ErrorKind),
+    CliExit,
 }
 
 pub async fn async_read_lines<P>(filename: P) -> Result<Arc<String>, Error>

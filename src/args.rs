@@ -1,10 +1,14 @@
 extern crate getopts;
 use getopts::Options;
 
-use crate::utils;
-
 const PROGRAM_DESC: &str = env!("CARGO_PKG_DESCRIPTION");
 const PROGRAM_NAME: &str = env!("CARGO_PKG_NAME");
+const PROGRAM_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Error {
+    CliExit,
+}
 
 fn print_usage(program: &str, opts: Options) {
     let brief = format!("Usage: {} FILE [options]", program);
@@ -16,11 +20,12 @@ fn print_usage(program: &str, opts: Options) {
     );
 }
 
-pub fn parse_args(args: &[String]) -> Result<String, utils::Error> {
+pub fn parse_args(args: &[String]) -> Result<String, Error> {
     let program = args[0].clone();
 
     let mut opts = Options::new();
     opts.optflag("h", "help", "print this help menu");
+    opts.optflag("v", "version", "prints version information");
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
         Err(f) => {
@@ -29,7 +34,11 @@ pub fn parse_args(args: &[String]) -> Result<String, utils::Error> {
     };
     if matches.opt_present("h") {
         print_usage(&program, opts);
-        return Ok(String::new());
+        return Err(Error::CliExit);
+    }
+    if matches.opt_present("v") {
+        println!("{}", PROGRAM_VERSION);
+        return Err(Error::CliExit);
     }
     let filename = if !matches.free.is_empty() {
         matches.free[0].clone()

@@ -3,16 +3,15 @@ extern crate pretty_env_logger;
 extern crate log;
 
 mod args;
+mod icons;
 mod stdout;
 mod task_runners;
 mod utils;
+mod widgets;
 
 use args::parse_args;
 use iced::alignment::Horizontal::Left;
-use iced::widget::{
-    self, button, column, container, horizontal_space, pick_list, row, scrollable, text, tooltip,
-    Column,
-};
+use iced::widget::{self, column, horizontal_space, pick_list, row, scrollable, text, Column};
 use iced::Alignment::Center;
 use iced::Length::Fill;
 use iced::{Element, Font, Subscription, Task, Theme};
@@ -32,10 +31,16 @@ static SCROLLABLE_ID: Lazy<scrollable::Id> = Lazy::new(scrollable::Id::unique);
 pub fn main() -> iced::Result {
     pretty_env_logger::init();
     debug!("start ck");
-    let filename: String = if let Ok(f) = parse_args(&env::args().collect_vec()) {
-        f
-    } else {
-        return Ok(());
+
+    let filename = match parse_args(&env::args().collect_vec()) {
+        Ok(f) => {
+            debug!("file returned: {}", f);
+            f
+        }
+        Err(args::Error::CliExit) => {
+            debug!("exit by cli");
+            return Ok(());
+        }
     };
 
     iced::application("Editor - Iced", Editor::update, Editor::view)
@@ -160,8 +165,11 @@ impl Editor {
             Message::Reload => Task::done(Message::LoadMakeTargetsPEG),
             Message::LoadMakeTargetsPEG => {
                 self.targets.clear();
-                let filename = self.filename.clone();
-                Task::perform(async_read_lines(filename), Message::ParseMakeTargets)
+
+                Task::perform(
+                    async_read_lines(self.filename.clone()),
+                    Message::ParseMakeTargets,
+                )
             }
             Message::ParseMakeTargets(result) => {
                 if let Ok(contents) = result {
@@ -172,6 +180,7 @@ impl Editor {
                         }
                     }
                 }
+
                 Task::none()
             }
 
@@ -182,6 +191,7 @@ impl Editor {
             }
             Message::ScrollToEnd => {
                 self.current_scroll_offset = scrollable::RelativeOffset::END;
+
                 scrollable::snap_to(SCROLLABLE_ID.clone(), self.current_scroll_offset)
             }
             Message::Scrolled(viewport) => {
@@ -200,7 +210,7 @@ impl Editor {
 
     fn view(&self) -> Element<Message> {
         let controls = row![
-            action(reload_icon(), "reload", Some(Message::Reload)),
+            widgets::action(icons::reload_icon(), "reload", Some(Message::Reload)),
             horizontal_space(),
             pick_list(Theme::ALL, Some(self.theme.clone()), Message::ThemeSelected)
                 .text_size(14)
@@ -208,18 +218,23 @@ impl Editor {
         ]
         .spacing(10)
         .align_y(Center);
-        let scroll_to_end_button =
-            || action(down_icon(), "Scroll to end", Some(Message::ScrollToEnd));
+        let scroll_to_end_button = || {
+            widgets::action(
+                icons::down_icon(),
+                "Scroll to end",
+                Some(Message::ScrollToEnd),
+            )
+        };
         let scroll_auto_on_off_button = || {
-            action(
-                fast_forward_icon(),
+            widgets::action(
+                icons::fast_forward_icon(),
                 "auto scroll",
                 Some(Message::ScrollAutoToggle),
             )
         };
         let scroll_to_beginning_button = || {
-            action(
-                up_icon(),
+            widgets::action(
+                icons::up_icon(),
                 "Scroll to beginning",
                 Some(Message::ScrollToBeginning),
             )
@@ -237,14 +252,14 @@ impl Editor {
         let status = row![].spacing(10);
         let mut targets = Vec::new();
         for (id, target) in self.targets.iter().enumerate() {
-            targets.push(target_card(
-                action(
-                    start_icon(),
+            targets.push(widgets::target_card(
+                widgets::action(
+                    icons::start_icon(),
                     target,
                     Some(Message::TaskMake(id, target.clone())),
                 ),
                 target,
-                action(stop_icon(), "stop", Some(Message::TaskStop(id))),
+                widgets::action(icons::stop_icon(), "stop", Some(Message::TaskStop(id))),
             ));
         }
         let text_box: Column<Message> =
@@ -272,7 +287,6 @@ impl Editor {
         let scrollable_targets: Element<Message> = Element::from(
             scrollable(
                 Column::from_vec(targets)
-                    // column![text_box,]
                     .align_x(Left)
                     .padding([10, 0])
                     .spacing(10),
@@ -292,82 +306,15 @@ impl Editor {
 
         let row_of_scrollables = row![scrollable_targets, scrollable_stdout,];
 
-        column![
-            controls,
-            controls_output,
-            row_of_scrollables,
-            // text_box,
-            status,
-        ]
-        .spacing(10)
-        .padding(10)
-        .into()
+        column![controls, controls_output, row_of_scrollables, status,]
+            .spacing(10)
+            .padding(10)
+            .into()
     }
 
     fn theme(&self) -> Theme {
         self.theme.clone()
     }
-}
-
-fn target_card<'a, Message: Clone + 'a>(
-    action: Element<'a, Message>,
-    label: &'a str,
-    other_action: Element<'a, Message>,
-) -> Element<'a, Message> {
-    container(row![action, other_action, label].spacing(1))
-        .style(container::bordered_box)
-        .padding(1)
-        .into()
-}
-
-fn action<'a, Message: Clone + 'a>(
-    content: impl Into<Element<'a, Message>>,
-    label: &'a str,
-    on_press: Option<Message>,
-) -> Element<'a, Message> {
-    let action = button(container(content).center_x(10));
-
-    if let Some(on_press) = on_press {
-        tooltip(
-            action.on_press(on_press),
-            label,
-            tooltip::Position::FollowCursor,
-        )
-        .style(container::transparent)
-        .into()
-    } else {
-        action.style(button::secondary).into()
-    }
-}
-
-fn reload_icon<'a, Message>() -> Element<'a, Message> {
-    icon('\u{0e800}')
-}
-
-fn start_icon<'a, Message>() -> Element<'a, Message> {
-    icon('\u{0e801}')
-}
-
-fn up_icon<'a, Message>() -> Element<'a, Message> {
-    icon('\u{0e802}')
-}
-
-fn down_icon<'a, Message>() -> Element<'a, Message> {
-    icon('\u{0e803}')
-}
-
-fn fast_forward_icon<'a, Message>() -> Element<'a, Message> {
-    icon('\u{0f103}')
-}
-
-fn stop_icon<'a, Message>() -> Element<'a, Message> {
-    icon('\u{0e804}')
-}
-
-fn icon<'a, Message>(codepoint: char) -> Element<'a, Message> {
-    const ICON_FONT: Font = Font::with_name("editor-icons");
-
-    text(codepoint).font(ICON_FONT).into()
 }
 
 // StdOutput
