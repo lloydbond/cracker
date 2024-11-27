@@ -3,6 +3,7 @@ extern crate pretty_env_logger;
 extern crate log;
 
 mod args;
+mod icons;
 mod stdout;
 mod task_runners;
 mod utils;
@@ -16,6 +17,7 @@ use iced::widget::{
 use iced::Alignment::Center;
 use iced::Length::Fill;
 use iced::{Element, Font, Subscription, Task, Theme};
+use icons::{down_icon, fast_forward_icon, reload_icon, start_icon, stop_icon, up_icon};
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use std::env;
@@ -32,10 +34,18 @@ static SCROLLABLE_ID: Lazy<scrollable::Id> = Lazy::new(scrollable::Id::unique);
 pub fn main() -> iced::Result {
     pretty_env_logger::init();
     debug!("start ck");
-    let filename: String = if let Ok(f) = parse_args(&env::args().collect_vec()) {
-        f
-    } else {
-        return Ok(());
+
+    let result = parse_args(&env::args().collect_vec());
+
+    let filename = match result {
+        Ok(f) => {
+            debug!("file returned: {}", f);
+            f
+        }
+        Err(args::Error::CliExit) => {
+            debug!("exit by cli");
+            return Ok(());
+        }
     };
 
     iced::application("Editor - Iced", Editor::update, Editor::view)
@@ -338,36 +348,6 @@ fn action<'a, Message: Clone + 'a>(
     } else {
         action.style(button::secondary).into()
     }
-}
-
-fn reload_icon<'a, Message>() -> Element<'a, Message> {
-    icon('\u{0e800}')
-}
-
-fn start_icon<'a, Message>() -> Element<'a, Message> {
-    icon('\u{0e801}')
-}
-
-fn up_icon<'a, Message>() -> Element<'a, Message> {
-    icon('\u{0e802}')
-}
-
-fn down_icon<'a, Message>() -> Element<'a, Message> {
-    icon('\u{0e803}')
-}
-
-fn fast_forward_icon<'a, Message>() -> Element<'a, Message> {
-    icon('\u{0f103}')
-}
-
-fn stop_icon<'a, Message>() -> Element<'a, Message> {
-    icon('\u{0e804}')
-}
-
-fn icon<'a, Message>(codepoint: char) -> Element<'a, Message> {
-    const ICON_FONT: Font = Font::with_name("editor-icons");
-
-    text(codepoint).font(ICON_FONT).into()
 }
 
 // StdOutput
