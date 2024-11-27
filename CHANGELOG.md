@@ -1,8 +1,9 @@
-[v0.12.0] 2024-11-26
+[v0.12.0] 2024-11-27
 -------------------
 
 -   cli arg parameters now exit properly
--   
+-   code readability improvements
+-   group code domains into seperate modules
 
 [v0.11.1] 2024-11-26
 -------------------
