@@ -22,6 +22,7 @@ use stdout::worker::{self};
 use task_runners::makefile::parser;
 use utils::{async_read_lines, Error};
 use widgets::stdoutput::StdOutput;
+use widgets::target_list;
 
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -251,17 +252,7 @@ impl Editor {
 
         let status = row![].spacing(10);
         let mut targets = Vec::new();
-        for (id, target) in self.targets.iter().enumerate() {
-            targets.push(widgets::target_card(
-                widgets::action(
-                    icons::start_icon(),
-                    target,
-                    Some(Message::TaskMake(id, target.clone())),
-                ),
-                target,
-                widgets::action(icons::stop_icon(), "stop", Some(Message::TaskStop(id))),
-            ));
-        }
+        target_list(&self.targets, &mut targets);
         let text_box: Column<Message> =
             Column::with_children(self.task_history.iter().map(StdOutput::view));
         let scrollable_stdout: Element<Message> = Element::from(
