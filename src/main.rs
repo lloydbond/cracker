@@ -11,17 +11,18 @@ mod widgets;
 
 use args::parse_args;
 use iced::alignment::Horizontal::Left;
-use iced::widget::{self, column, horizontal_space, pick_list, row, scrollable, text, Column};
+use iced::widget::{self, column, horizontal_space, pick_list, row, scrollable, Column};
 use iced::Alignment::Center;
 use iced::Length::Fill;
 use iced::{Element, Font, Subscription, Task, Theme};
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use std::env;
-use stdout::worker::{self, StdCommand};
-use task_runners::makefile::{self, parser};
-use tokio::time::Instant;
+use stdout::worker::{self};
+use task_runners::makefile::parser;
 use utils::{async_read_lines, Error};
+use widgets::stdoutput::StdOutput;
+use widgets::target_list;
 
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -120,7 +121,7 @@ impl Editor {
                     }
                 }
                 if let Some(task) = self.task_history.last_mut() {
-                    if task.id == id {
+                    if task.id() == id {
                         task.stop();
                     }
                 };
@@ -135,7 +136,7 @@ impl Editor {
                 debug!("stop id: {id:?}");
 
                 if let Some(task) = self.task_history.last_mut() {
-                    if task.id == id {
+                    if task.id() == id {
                         task.stop();
                     }
                 }
@@ -146,7 +147,7 @@ impl Editor {
             Message::TaskUpdate((id, output)) => {
                 let mut next_task = Task::none();
                 if let Some(task) = self.task_history.last_mut() {
-                    if task.id == id {
+                    if task.id() == id {
                         task.stream_update(output);
                     }
 
@@ -251,17 +252,7 @@ impl Editor {
 
         let status = row![].spacing(10);
         let mut targets = Vec::new();
-        for (id, target) in self.targets.iter().enumerate() {
-            targets.push(widgets::target_card(
-                widgets::action(
-                    icons::start_icon(),
-                    target,
-                    Some(Message::TaskMake(id, target.clone())),
-                ),
-                target,
-                widgets::action(icons::stop_icon(), "stop", Some(Message::TaskStop(id))),
-            ));
-        }
+        target_list(&self.targets, &mut targets);
         let text_box: Column<Message> =
             Column::with_children(self.task_history.iter().map(StdOutput::view));
         let scrollable_stdout: Element<Message> = Element::from(
@@ -314,119 +305,5 @@ impl Editor {
 
     fn theme(&self) -> Theme {
         self.theme.clone()
-    }
-}
-
-// StdOutput
-#[derive(Debug)]
-struct StdOutput {
-    id: usize,
-    command: StdCommand,
-    state: State,
-    textbox_output: Vec<String>,
-    tick: Instant,
-    ms_200: core::time::Duration,
-}
-
-#[derive(Debug, Clone)]
-enum State {
-    Idle,
-    Streaming { stream: Vec<String> },
-    Finished,
-    Errored,
-}
-
-impl StdOutput {
-    pub fn new(id: usize, target: String) -> Self {
-        let tick = Instant::now();
-        Self {
-            id,
-            command: makefile::new(target),
-            state: State::Idle,
-            textbox_output: Vec::new(),
-            tick,
-            ms_200: core::time::Duration::from_millis(200),
-        }
-    }
-    pub fn target(&self) -> String {
-        self.command.target()
-    }
-
-    pub fn start(&mut self) {
-        info!("start task {:?}", self.target());
-        match self.state {
-            State::Idle { .. } | State::Finished { .. } | State::Errored { .. } => {
-                self.state = State::Streaming {
-                    stream: vec!["Stream started...".to_string()],
-                };
-            }
-            State::Streaming { .. } => {}
-        }
-    }
-
-    pub fn stop(&mut self) {
-        info!("stopping task {:?}", self.target());
-        self.state = State::Finished;
-        let end_stream = vec!["".to_string(), "stream ended...".to_string()];
-        self.textbox_output.extend(end_stream);
-    }
-    pub fn stream_update(&mut self, output_update: Result<worker::Stdout, worker::Error>) {
-        if let State::Streaming { .. } = &mut self.state {
-            match output_update {
-                Ok(worker::Stdout::OutputUpdate { output }) => {
-                    self.textbox_output.extend(output);
-                    // *stream = output
-                }
-                Ok(worker::Stdout::Finished) => {
-                    self.state = State::Finished;
-                }
-                Ok(worker::Stdout::Prepare { output }) => {
-                    self.textbox_output.extend(output);
-                }
-
-                Err(worker::Error::NoContent) => {
-                    self.state = State::Errored;
-                }
-                Err(worker::Error::Failed(_)) => {
-                    self.state = State::Errored;
-                }
-            }
-        }
-        if self.tick.elapsed() >= self.ms_200 && self.textbox_output.len() > 1_000_000 {
-            let r = self.textbox_output.len() - 1_000_000;
-            self.textbox_output.drain(..r);
-            self.tick = Instant::now();
-        }
-    }
-    pub fn subscription(&self) -> Subscription<Message> {
-        match self.state {
-            State::Streaming { .. } => {
-                worker::subscription(self.id, self.command.clone()).map(Message::TaskUpdate)
-            }
-            _ => Subscription::none(),
-        }
-    }
-
-    pub fn view(&self) -> Element<Message> {
-        fn get_window(len: usize, width: usize) -> usize {
-            if len > width {
-                return len - width;
-            }
-            0
-        }
-        let idx = get_window(
-            self.textbox_output.len(),
-            match self.state {
-                State::Finished => 1_000,
-                _ => 100,
-            },
-        );
-        Column::with_children(
-            self.textbox_output[idx..]
-                .iter()
-                .map(|o| text!("{}", o).font(Font::MONOSPACE))
-                .map(Element::from),
-        )
-        .into()
     }
 }

@@ -2,7 +2,7 @@
 name = "ck-cracker"
 include = ["src/**/*", "README.md", "CHANGELOG.md","LISCENSE", "fonts/**/*", "Cargo.toml"]
 default-run = "ck"
-version = "0.12.0"
+version = "0.13.0"
 edition = "2021"
 license = "GPL-3.0"
 reademe = "README.md"
@@ -20,6 +20,10 @@ path = "src/main.rs"
 [dependencies]
 getopts = "0.2.21"
 iced = {version = "0.13.1", features = ["debug", "tokio", "highlighter", "lazy"]}
+iced_core = "0.13.2"
+iced_renderer = "0.13.0"
+iced_tiny_skia = "0.13.0"
+iced_wgpu = "0.13.5"
 itertools = "0.13.0"
 log = "0.4.22"
 once_cell = "1.20.2"
