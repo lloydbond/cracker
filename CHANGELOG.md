@@ -1,9 +1,9 @@
-[v0.13.0] 2024-11-27
+[v0.13.0] 2024-12-06
 -------------------
 
 -   refactor StdOutput to widget
--   
--   
+-   targets moved to widget
+-   update README.md
 
 [v0.12.0] 2024-11-27
 -------------------

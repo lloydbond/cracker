@@ -1,12 +1,23 @@
 # cracker
 A rusty ui for exploring and starting tasks. Of course, blazingly fast.
 
+- [Requirements](#requirements)
+- [Supports](#supports)
+- [Installation Methods](#installation-methods)
+  - [Install with cargo](#install-with-cargo)
+  - [Manual Installation](#manual-installation)
+- [Usage](#usage)
+  - [Enable Log Messages](#enable-log-messages)
+- [TODO](#todo)
+- [Motivation](#motivation)
+- [Who is this For](#who-is-this-for)
+
 ## Requirements
 
 * [rust-lang](https://www.rust-lang.org/) >= 1.81.0
 
 Be sure to add $HOME/.cargo/bin/ to your environment PATH variable.
-## Supports:
+## Supports
 
 -   Linux
 -  *macOS
@@ -67,4 +78,13 @@ Log messages are limited for as the tool reaches a 1.0 release.
 
 ## Motivation
 
-* Quick and easy execution and monitoring of Makefile and other types of runners for your local project.
+### Who is this For
+Quick and easy execution and monitoring of Makefile and other types of runners for your local project.
+When you need to give a laymon commands to run and they are averse to typing in a terminal.
+
+### ***Note from the maintainer***
+
+I've been using this project as a means to learn Rust. Expect improvments and additions as I have time. Any improvements, code style, or feed back will go along way for
+this project. Any contributions or additions to the supported Task runners as well as UI beautifcations or simplifications
+are greatly welcomed and appreciated. Happy Coding!
+
